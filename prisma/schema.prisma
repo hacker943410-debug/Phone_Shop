@@ -1,0 +1,359 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum InventoryStatus {
+  IN_STOCK
+  RESERVED
+  SOLD
+  RETURNED
+  DISCARDED
+}
+
+enum SaleStatus {
+  COMPLETED
+  CANCELED
+}
+
+enum DiscountMethod {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountTarget {
+  CARRIER
+  DEVICE
+}
+
+enum RevenueCalculationMethod {
+  NONE
+  FIXED_AMOUNT
+  PERCENTAGE
+}
+
+enum ReceivableStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  COMPLETED
+  CANCELED
+}
+
+model User {
+  id             String          @id @default(cuid())
+  username       String          @unique
+  displayName    String
+  passwordHash   String?
+  role           UserRole
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  inventoryItems InventoryItem[] @relation("InventoryAssignee")
+  payments       Payment[]       @relation("PaymentStaff")
+  sales          Sale[]          @relation("SalesStaff")
+
+  @@index([role, isActive])
+}
+
+model Carrier {
+  id                 String             @id @default(cuid())
+  code               String             @unique
+  name               String             @unique
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  customers          Customer[]         @relation("CustomerCurrentCarrier")
+  discountPolicies   DiscountPolicy[]
+  inventoryItems     InventoryItem[]
+  ratePlans          RatePlan[]
+  rebatePolicies     RebatePolicy[]
+  sales              Sale[]
+  saleProfitPolicies SaleProfitPolicy[]
+  services           AddOnService[]
+
+  @@index([isActive])
+}
+
+model DeviceModel {
+  id               String           @id @default(cuid())
+  name             String           @unique
+  manufacturer     String?
+  isActive         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  discountPolicies DiscountPolicy[]
+  inventoryItems   InventoryItem[]
+  rebatePolicies   RebatePolicy[]
+  sales            Sale[]
+
+  @@index([isActive])
+}
+
+model RatePlan {
+  id          String   @id @default(cuid())
+  carrierId   String
+  name        String
+  monthlyFee  Int
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  carrier     Carrier  @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  sales       Sale[]
+
+  @@unique([carrierId, name])
+  @@index([carrierId, isActive])
+}
+
+model AddOnService {
+  id          String             @id @default(cuid())
+  carrierId   String?
+  name        String
+  monthlyFee  Int?
+  description String?
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  carrier     Carrier?           @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  saleLinks   SaleAddOnService[]
+
+  @@unique([carrierId, name])
+  @@index([isActive])
+}
+
+model InventoryItem {
+  id            String          @id @default(cuid())
+  carrierId     String
+  deviceModelId String
+  color         String
+  capacity      String
+  imei          String          @unique
+  costAmount    Int
+  status        InventoryStatus
+  receivedAt    DateTime
+  dispatchedAt  DateTime?
+  notes         String?
+  isHidden      Boolean         @default(false)
+  assigneeId    String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  assignee      User?           @relation("InventoryAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  carrier       Carrier         @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  deviceModel   DeviceModel     @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
+  sales         Sale[]
+
+  @@index([carrierId, status])
+  @@index([deviceModelId, status])
+  @@index([receivedAt])
+}
+
+model Customer {
+  id               String       @id @default(cuid())
+  name             String
+  phone            String
+  normalizedPhone  String       @unique
+  birthDate        DateTime?
+  address          String?
+  memo             String?
+  currentCarrierId String?
+  isHidden         Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  currentCarrier   Carrier?     @relation("CustomerCurrentCarrier", fields: [currentCarrierId], references: [id], onDelete: SetNull)
+  receivables      Receivable[]
+  sales            Sale[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([isHidden])
+}
+
+model RebatePolicy {
+  id                  String      @id @default(cuid())
+  name                String
+  carrierId           String
+  deviceModelId       String
+  startsAt            DateTime
+  endsAt              DateTime
+  defaultRebateAmount Int
+  memo                String?
+  isActive            Boolean     @default(true)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  carrier             Carrier     @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  deviceModel         DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
+  appliedSales        Sale[]      @relation("AppliedRebatePolicy")
+
+  @@index([carrierId, deviceModelId, startsAt, endsAt, isActive])
+}
+
+model SaleProfitPolicy {
+  id                String                   @id @default(cuid())
+  name              String
+  carrierId         String
+  startsAt          DateTime
+  endsAt            DateTime
+  calculationMethod RevenueCalculationMethod
+  calculationValue  Int                      @default(0)
+  memo              String?
+  isActive          Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  carrier           Carrier                  @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  appliedSales      Sale[]                   @relation("AppliedSaleProfitPolicy")
+
+  @@index([carrierId, startsAt, endsAt, isActive])
+}
+
+model DiscountPolicy {
+  id             String          @id @default(cuid())
+  name           String
+  target         DiscountTarget
+  carrierId      String?
+  deviceModelId  String?
+  startsAt       DateTime
+  endsAt         DateTime
+  discountMethod DiscountMethod
+  discountValue  Int
+  memo           String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  carrier        Carrier?        @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  deviceModel    DeviceModel?    @relation(fields: [deviceModelId], references: [id], onDelete: SetNull)
+  appliedSales   Sale[]          @relation("AppliedDiscountPolicy")
+
+  @@index([target, startsAt, endsAt, isActive])
+  @@index([carrierId, isActive])
+  @@index([deviceModelId, isActive])
+}
+
+model Sale {
+  id                          String            @id @default(cuid())
+  saleDate                    DateTime
+  status                      SaleStatus        @default(COMPLETED)
+  customerId                  String
+  staffId                     String
+  carrierId                   String
+  ratePlanId                  String?
+  inventoryItemId             String
+  deviceModelId               String
+  listPrice                   Int
+  discountApplied             Boolean           @default(false)
+  discountMethod              DiscountMethod?
+  discountValue               Int?
+  discountSuggestionMethod    DiscountMethod?
+  discountSuggestionValue     Int?
+  discountAmount              Int               @default(0)
+  discountedPrice             Int
+  subsidyAmount               Int               @default(0)
+  finalSalePrice              Int
+  cashAmount                  Int               @default(0)
+  cardAmount                  Int               @default(0)
+  bankTransferAmount          Int               @default(0)
+  cardInstallmentMonths       Int?
+  actualReceivedAmount        Int
+  receivableAmount            Int               @default(0)
+  deviceCostAmount            Int
+  rebateAmount                Int               @default(0)
+  policyRevenueAmount         Int               @default(0)
+  profitCalculationBaseAmount Int?
+  profitDeductionAmount       Int               @default(0)
+  totalProfitAmount           Int               @default(0)
+  appliedRebatePolicyId       String?
+  appliedSaleProfitPolicyId   String?
+  appliedDiscountPolicyId     String?
+  appliedRebatePolicyName     String?
+  appliedSaleProfitPolicyName String?
+  appliedDiscountPolicyName   String?
+  notes                       String?
+  canceledAt                  DateTime?
+  cancellationReason          String?
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+  appliedDiscountPolicy       DiscountPolicy?   @relation("AppliedDiscountPolicy", fields: [appliedDiscountPolicyId], references: [id], onDelete: SetNull)
+  appliedRebatePolicy         RebatePolicy?     @relation("AppliedRebatePolicy", fields: [appliedRebatePolicyId], references: [id], onDelete: SetNull)
+  appliedSaleProfitPolicy     SaleProfitPolicy? @relation("AppliedSaleProfitPolicy", fields: [appliedSaleProfitPolicyId], references: [id], onDelete: SetNull)
+  carrier                     Carrier           @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  customer                    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  deviceModel                 DeviceModel       @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
+  inventoryItem               InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  payments                    Payment[]
+  ratePlan                    RatePlan?         @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
+  receivable                  Receivable?
+  selectedServices            SaleAddOnService[]
+  staff                       User              @relation("SalesStaff", fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@index([saleDate, status])
+  @@index([customerId, saleDate])
+  @@index([inventoryItemId, saleDate])
+}
+
+model SaleAddOnService {
+  saleId         String
+  addOnServiceId String
+  nameSnapshot   String
+  monthlyFee     Int?
+  sale           Sale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  addOnService   AddOnService @relation(fields: [addOnServiceId], references: [id], onDelete: Restrict)
+
+  @@id([saleId, addOnServiceId])
+}
+
+model Receivable {
+  id             String           @id @default(cuid())
+  saleId         String           @unique
+  customerId     String
+  status         ReceivableStatus @default(UNPAID)
+  originalAmount Int
+  balanceAmount  Int
+  memo           String?
+  closedAt       DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  payments       Payment[]
+  sale           Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, status])
+  @@index([balanceAmount])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  receivableId String
+  saleId       String
+  staffId      String
+  paymentDate  DateTime
+  amount       Int
+  method       PaymentMethod
+  status       PaymentStatus @default(COMPLETED)
+  memo         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  receivable   Receivable    @relation(fields: [receivableId], references: [id], onDelete: Restrict)
+  sale         Sale          @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  staff        User          @relation("PaymentStaff", fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@index([receivableId, paymentDate])
+  @@index([paymentDate, status])
+}
