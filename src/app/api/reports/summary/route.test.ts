@@ -66,6 +66,7 @@ describe("GET /api/reports/summary", () => {
       preset: undefined,
       dateFrom: "2026-04-01",
       dateTo: "2026-04-12",
+      storeId: undefined,
     });
   });
 });

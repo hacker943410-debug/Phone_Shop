@@ -14,6 +14,7 @@ export default async function DashboardPage({
     preset?: string | string[];
     dateFrom?: string | string[];
     dateTo?: string | string[];
+    storeId?: string | string[];
   }>;
 }) {
   const report = await getDashboardReportData(await searchParams);

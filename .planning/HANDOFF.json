@@ -1,0 +1,68 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-04-15T22:20:28.3476638+09:00",
+  "phase": null,
+  "phase_name": "dashboard-sales-followup",
+  "phase_dir": null,
+  "plan": 3,
+  "task": 3,
+  "total_tasks": 6,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Dashboard and global control redesign",
+      "status": "done"
+    },
+    {
+      "id": 2,
+      "name": "Store dimension and activation-rule data model integration",
+      "status": "done"
+    },
+    {
+      "id": 3,
+      "name": "Sales management compact UI overhaul and interaction stabilization",
+      "status": "done"
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 4,
+      "name": "Connect the sales launcher 신규 고객 branch to customer registration and sales registration handoff",
+      "status": "not_started"
+    },
+    {
+      "id": 5,
+      "name": "Refine store/date drill-down across dashboard, reports, and sales list screens",
+      "status": "not_started"
+    },
+    {
+      "id": 6,
+      "name": "Close remaining QA on custom controls and back-navigation interaction paths",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {
+      "decision": "Keep the dashboard chart-first and move verbose operational detail into modals.",
+      "rationale": "The user wanted visual emphasis over table-heavy scanning while preserving access to detailed records."
+    },
+    {
+      "decision": "Add Store as a first-class data axis now.",
+      "rationale": "Future store-level reporting and sales filtering would otherwise require another schema rewrite."
+    },
+    {
+      "decision": "Drive activation eligibility from policy-managed carrier rules.",
+      "rationale": "Carrier waiting periods are operational policy, not static dashboard logic."
+    },
+    {
+      "decision": "Use auto-applying filters and compact rows for sales management.",
+      "rationale": "The old dense table and explicit apply buttons were visually heavy and slowed routine use."
+    }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Resume from /sales and implement the 신규 고객 launcher branch so customer registration can hand off directly into sales registration.",
+  "context_notes": "The product is now in a usable follow-up state. The biggest architectural changes for this round are already in place: store dimension, activation rules, custom controls, dashboard chart layout, and sales overview overhaul. The next session should stay narrow and finish flow completion plus QA rather than reopening large UI redesigns."
+}

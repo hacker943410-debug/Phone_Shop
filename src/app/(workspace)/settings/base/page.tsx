@@ -11,7 +11,10 @@ export const metadata: Metadata = {
 export default async function BaseInfoPage() {
   await requireRole("ADMIN");
 
-  const [carrierRows, ratePlanRows, addOnServiceRows] = await Promise.all([
+  const [storeRows, carrierRows, ratePlanRows, addOnServiceRows] = await Promise.all([
+    prisma.store.findMany({
+      orderBy: [{ isDefault: "desc" }, { isActive: "desc" }, { name: "asc" }],
+    }),
     prisma.carrier.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
       include: {
@@ -51,6 +54,14 @@ export default async function BaseInfoPage() {
 
   return (
     <BaseInfoOverview
+      stores={storeRows.map((store) => ({
+        id: store.id,
+        code: store.code,
+        name: store.name,
+        region: store.region,
+        isActive: store.isActive,
+        isDefault: store.isDefault,
+      }))}
       carriers={carrierRows.map((carrier) => ({
         id: carrier.id,
         code: carrier.code,

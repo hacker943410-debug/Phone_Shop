@@ -3,9 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  ActivationCountUnit,
+  ActivationMonthCountMode,
   DiscountMethod,
   DiscountTarget,
   RevenueCalculationMethod,
+  type ActivationCountUnit as ActivationCountUnitValue,
+  type ActivationMonthCountMode as ActivationMonthCountModeValue,
   type DiscountMethod as DiscountMethodValue,
   type DiscountTarget as DiscountTargetValue,
   type RevenueCalculationMethod as RevenueCalculationMethodValue,
@@ -84,9 +88,41 @@ function readRevenueCalculationMethod(
   }
 }
 
+function readActivationCountUnit(
+  formData: FormData,
+  key: string,
+): ActivationCountUnitValue | null {
+  const value = readText(formData, key);
+
+  switch (value) {
+    case ActivationCountUnit.DAY:
+    case ActivationCountUnit.MONTH:
+      return value;
+    default:
+      return null;
+  }
+}
+
+function readActivationMonthCountMode(
+  formData: FormData,
+  key: string,
+): ActivationMonthCountModeValue | null {
+  const value = readText(formData, key);
+
+  switch (value) {
+    case ActivationMonthCountMode.INCLUDE_CURRENT_MONTH:
+    case ActivationMonthCountMode.EXCLUDE_CURRENT_MONTH:
+      return value;
+    default:
+      return null;
+  }
+}
+
 function revalidatePolicyViews() {
   revalidatePath("/settings/policies");
   revalidatePath("/sales");
+  revalidatePath("/");
+  revalidatePath("/reports/summary");
 }
 
 export async function upsertRebatePolicyAction(formData: FormData) {
@@ -316,6 +352,82 @@ export async function toggleDiscountPolicyActiveAction(formData: FormData) {
   }
 
   await prisma.discountPolicy.update({
+    where: { id },
+    data: { isActive: nextActive },
+  });
+
+  revalidatePolicyViews();
+}
+
+export async function upsertCarrierActivationRuleAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readOptionalText(formData, "id");
+  const carrierId = readText(formData, "carrierId");
+  const countUnit = readActivationCountUnit(formData, "countUnit");
+  const countValue = readInt(formData, "countValue");
+  const rawMonthCountMode = readActivationMonthCountMode(
+    formData,
+    "monthCountMode",
+  );
+  const memo = readOptionalText(formData, "memo");
+  const monthCountMode =
+    countUnit === ActivationCountUnit.MONTH ? rawMonthCountMode : null;
+
+  if (
+    !carrierId ||
+    !countUnit ||
+    countValue === null ||
+    countValue <= 0 ||
+    (countUnit === ActivationCountUnit.MONTH && !monthCountMode)
+  ) {
+    return;
+  }
+
+  if (id) {
+    await prisma.carrierActivationRule.update({
+      where: { id },
+      data: {
+        carrierId,
+        countUnit,
+        countValue,
+        monthCountMode,
+        memo,
+      },
+    });
+  } else {
+    await prisma.carrierActivationRule.upsert({
+      where: { carrierId },
+      update: {
+        countUnit,
+        countValue,
+        monthCountMode,
+        memo,
+      },
+      create: {
+        carrierId,
+        countUnit,
+        countValue,
+        monthCountMode,
+        memo,
+      },
+    });
+  }
+
+  revalidatePolicyViews();
+}
+
+export async function toggleCarrierActivationRuleActiveAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+  const nextActive = readText(formData, "nextActive") === "true";
+
+  if (!id) {
+    return;
+  }
+
+  await prisma.carrierActivationRule.update({
     where: { id },
     data: { isActive: nextActive },
   });

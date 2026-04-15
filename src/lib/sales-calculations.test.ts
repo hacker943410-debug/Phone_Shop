@@ -64,6 +64,31 @@ describe("sales calculations", () => {
     });
   });
 
+  it("subtracts subsidy from final sale price and receivable", () => {
+    expect(
+      calculateSalesAmounts({
+        listPrice: 1_400_000,
+        subsidyAmount: 88_000,
+        discountApplied: true,
+        discountMethod: "PERCENTAGE",
+        discountValue: 8,
+        rebateAmount: 310_000,
+        policyRevenueAmount: 70_000,
+        cashAmount: 200_000,
+        cardAmount: 788_000,
+        bankTransferAmount: 0,
+      }),
+    ).toEqual({
+      discountAmount: 112_000,
+      discountedPrice: 1_288_000,
+      finalSalePrice: 1_200_000,
+      actualReceivedAmount: 988_000,
+      receivableAmount: 212_000,
+      profitCalculationBaseAmount: 1_200_000,
+      totalProfitAmount: 380_000,
+    });
+  });
+
   it("treats NONE or zero-value policy revenue as zero", () => {
     expect(calculatePolicyRevenueAmount(1_000_000, "NONE", 5)).toBe(0);
     expect(calculatePolicyRevenueAmount(1_000_000, "PERCENTAGE", 0)).toBe(0);

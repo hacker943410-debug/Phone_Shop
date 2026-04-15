@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     preset: url.searchParams.get("preset") ?? undefined,
     dateFrom: url.searchParams.get("dateFrom") ?? undefined,
     dateTo: url.searchParams.get("dateTo") ?? undefined,
+    storeId: url.searchParams.get("storeId") ?? undefined,
   });
   const csv = buildDashboardCsv(report);
   const filename = `phoneshop-summary-${report.filters.dateFrom}-to-${report.filters.dateTo}.csv`;

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { LoginPanel } from "@/components/login/login-panel";
 import { getCurrentUser } from "@/lib/auth/dal";
-import { resolvePostLoginPath, normalizeRedirectPath } from "@/lib/auth/access";
+import { normalizeRedirectPath, resolvePostLoginPath } from "@/lib/auth/access";
 
 export const metadata: Metadata = {
   title: "로그인",

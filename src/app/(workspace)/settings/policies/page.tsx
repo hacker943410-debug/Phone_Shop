@@ -17,6 +17,7 @@ export default async function PoliciesPage() {
     rebatePolicies,
     saleProfitPolicies,
     discountPolicies,
+    carrierActivationRules,
   ] = await Promise.all([
     prisma.carrier.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
@@ -75,6 +76,16 @@ export default async function PoliciesPage() {
         },
       },
     }),
+    prisma.carrierActivationRule.findMany({
+      orderBy: [{ isActive: "desc" }, { carrier: { name: "asc" } }],
+      include: {
+        carrier: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
   ]);
 
   return (
@@ -120,6 +131,16 @@ export default async function PoliciesPage() {
         discountValue: policy.discountValue,
         memo: policy.memo,
         isActive: policy.isActive,
+      }))}
+      carrierActivationRules={carrierActivationRules.map((rule) => ({
+        id: rule.id,
+        carrierId: rule.carrierId,
+        carrierName: rule.carrier.name,
+        countUnit: rule.countUnit,
+        countValue: rule.countValue,
+        monthCountMode: rule.monthCountMode,
+        memo: rule.memo,
+        isActive: rule.isActive,
       }))}
     />
   );

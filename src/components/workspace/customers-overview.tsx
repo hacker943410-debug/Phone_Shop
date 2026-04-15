@@ -2,6 +2,7 @@ import { upsertCustomerAction } from "@/app/actions/customers";
 import {
   EmptyState,
   FormField,
+  NoticeBanner,
   FormSelect,
   FormTextArea,
   SubmitButton,
@@ -13,17 +14,22 @@ import {
   Panel,
   TonePill,
 } from "@/components/workspace/workspace-primitives";
+import { ListPaginationControls } from "@/components/workspace/list-pagination-controls";
+import { secondaryButtonClassName } from "@/components/workspace/ui-classnames";
 import { formatKstDate } from "@/lib/date-utils";
 import { formatWon } from "@/lib/formatters";
+import type { PaginationState } from "@/lib/pagination";
 
 const editorCardClassName =
-  "rounded-[1.35rem] border border-slate-950/8 bg-stone-50/85 p-4 shadow-[0_12px_36px_-30px_rgba(15,23,42,0.35)]";
+  "rounded-lg border border-stone-200 bg-stone-50 p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05),0_1px_2px_rgba(15,23,42,0.08)]";
 
 const formGridClassName = "grid gap-3 md:grid-cols-2";
 
 const noticeMessageMap = {
-  "duplicate-phone": "같은 연락처의 고객이 이미 존재합니다. 기존 고객을 선택해 이력을 이어 주세요.",
-  "invalid-customer-form": "고객명과 연락처는 필수입니다. 입력값을 다시 확인해 주세요.",
+  "duplicate-phone":
+    "같은 연락처의 고객이 이미 존재합니다. 기존 고객을 선택해 이력을 이어서 관리해 주세요.",
+  "invalid-customer-form":
+    "고객명과 연락처는 필수입니다. 입력값을 다시 확인해 주세요.",
 } as const;
 
 const receivableToneMap = {
@@ -34,7 +40,7 @@ const receivableToneMap = {
 
 const receivableStatusLabelMap = {
   UNPAID: "미납",
-  PARTIALLY_PAID: "부분수납",
+  PARTIALLY_PAID: "부분 수납",
   PAID: "완납",
 } as const;
 
@@ -110,6 +116,7 @@ export interface CustomersOverviewProps {
   customers: CustomerListRecord[];
   selectedCustomer: SelectedCustomerRecord | null;
   filters: CustomerFilters;
+  pagination: PaginationState;
   metrics: CustomerMetrics;
   notice: keyof typeof noticeMessageMap | null;
 }
@@ -118,15 +125,14 @@ function getCarrierOptionLabel(carrier: CustomerCarrierOption) {
   return carrier.isActive ? carrier.name : `${carrier.name} (비활성)`;
 }
 
-function getReceivableStatusLabel(
-  status: CustomerReceivableRecord["status"],
-) {
+function getReceivableStatusLabel(status: CustomerReceivableRecord["status"]) {
   return receivableStatusLabelMap[status];
 }
 
-function buildCustomerHref(filters: CustomerFilters, customerId: string) {
-  const searchParams = new URLSearchParams();
-
+function appendCustomerFilterParams(
+  searchParams: URLSearchParams,
+  filters: CustomerFilters,
+) {
   if (filters.q) {
     searchParams.set("q", filters.q);
   }
@@ -138,10 +144,42 @@ function buildCustomerHref(filters: CustomerFilters, customerId: string) {
   if (filters.receivable !== "all") {
     searchParams.set("receivable", filters.receivable);
   }
+}
+
+function buildCustomersPageHref(filters: CustomerFilters, page: number) {
+  const searchParams = new URLSearchParams();
+
+  appendCustomerFilterParams(searchParams, filters);
+
+  if (page > 1) {
+    searchParams.set("page", String(page));
+  }
+
+  const query = searchParams.toString();
+
+  return query ? `/customers?${query}` : "/customers";
+}
+
+function buildCustomerHref(
+  filters: CustomerFilters,
+  page: number,
+  customerId: string,
+) {
+  const searchParams = new URLSearchParams();
+
+  appendCustomerFilterParams(searchParams, filters);
+
+  if (page > 1) {
+    searchParams.set("page", String(page));
+  }
 
   searchParams.set("customerId", customerId);
 
   return `/customers?${searchParams.toString()}`;
+}
+
+function getReceivableSummaryTone(balanceAmount: number) {
+  return balanceAmount > 0 ? "amber" : "slate";
 }
 
 export function CustomersOverview({
@@ -149,6 +187,7 @@ export function CustomersOverview({
   customers,
   selectedCustomer,
   filters,
+  pagination,
   metrics,
   notice,
 }: CustomersOverviewProps) {
@@ -159,11 +198,11 @@ export function CustomersOverview({
     ) ?? 0;
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="space-y-5 p-4 sm:p-5 lg:p-6">
       <PageIntro
         eyebrow="Customers"
-        title="연락처 기준 고객 장부를 묶고 판매·미수금 이력을 함께 봅니다."
-        description="고객 검색, 등록, 수정과 동시에 판매 이력과 미수금 흐름을 한 화면에서 확인하도록 연결했습니다. 이후 판매 등록 화면에서는 이 연락처 기준 데이터를 그대로 고객 선택 기준으로 사용할 수 있습니다."
+        title="연락처 기준으로 고객 흐름을 묶고 판매와 미수 이력을 함께 봅니다"
+        description="고객 검색, 등록, 수정과 동시에 판매 이력과 미수금 흐름을 한 화면에서 확인하도록 구성했습니다. 이후 판매 등록 화면에서도 같은 연락처 기준 고객 선택 흐름을 그대로 사용할 수 있습니다."
         actions={
           <>
             <ActionChip label={`등록 고객 ${metrics.totalCount}명`} tone="dark" />
@@ -172,11 +211,7 @@ export function CustomersOverview({
         }
       />
 
-      {notice ? (
-        <section className="rounded-[1.4rem] border border-rose-200 bg-rose-50/85 px-5 py-4 text-sm leading-6 text-rose-900">
-          {noticeMessageMap[notice]}
-        </section>
-      ) : null}
+      {notice ? <NoticeBanner message={noticeMessageMap[notice]} /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <MetricCard
@@ -202,7 +237,7 @@ export function CustomersOverview({
       <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
         <Panel
           title={selectedCustomer ? "고객 수정" : "고객 등록"}
-          description="판매 등록 전에 고객 정보를 먼저 정리하거나, 기존 고객 이력을 수정할 수 있습니다."
+          description="판매 등록 전에 고객 정보를 먼저 정리하거나 기존 고객 이력을 수정할 수 있습니다."
         >
           <form
             action={upsertCustomerAction}
@@ -232,7 +267,7 @@ export function CustomersOverview({
               name="currentCarrierId"
               defaultValue={selectedCustomer?.currentCarrierId ?? ""}
             >
-              <option value="">미지정</option>
+              <option value="">미정</option>
               {carriers.map((carrier) => (
                 <option key={carrier.id} value={carrier.id}>
                   {getCarrierOptionLabel(carrier)}
@@ -255,7 +290,7 @@ export function CustomersOverview({
               wrapperClassName="md:col-span-2"
               defaultValue={selectedCustomer?.address ?? ""}
               autoComplete="off"
-              placeholder="상세 주소는 메모에 보충 가능"
+              placeholder="상세 주소나 메모를 함께 남길 수 있습니다"
             />
             <FormTextArea
               label="메모"
@@ -269,7 +304,7 @@ export function CustomersOverview({
               {selectedCustomer ? (
                 <a
                   href="/customers"
-                  className="inline-flex items-center justify-center rounded-full border border-slate-950/12 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  className={`${secondaryButtonClassName} h-10 px-4`}
                 >
                   신규 등록 모드
                 </a>
@@ -281,7 +316,7 @@ export function CustomersOverview({
 
         <Panel
           title="고객 검색 / 필터"
-          description="연락처, 이름, 현재 통신사, 미수금 보유 여부로 목록을 줄일 수 있습니다."
+          description="연락처, 이름, 현재 통신사, 미수금 보유 여부로 목록을 좁힐 수 있습니다."
         >
           <form method="get" className={`${editorCardClassName} ${formGridClassName}`}>
             <FormField
@@ -315,7 +350,7 @@ export function CustomersOverview({
             <div className="md:col-span-2 flex flex-wrap items-center justify-end gap-2">
               <a
                 href="/customers"
-                className="inline-flex items-center justify-center rounded-full border border-slate-950/12 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                className={`${secondaryButtonClassName} h-10 px-4`}
               >
                 필터 초기화
               </a>
@@ -328,45 +363,87 @@ export function CustomersOverview({
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Panel
           title="고객 목록"
-          description="선택한 고객의 판매 이력과 미수금 이력이 오른쪽 상세에 바로 연결됩니다."
+          description={`현재 조건에 맞는 고객 ${pagination.totalCount}명을 테이블로 보여 주고, 선택한 고객의 판매 이력과 미수금 이력을 오른쪽 상세와 연결합니다.`}
         >
           <div className="space-y-3">
+            <ListPaginationControls
+              pagination={pagination}
+              itemLabel="명"
+              buildHref={(page) => buildCustomersPageHref(filters, page)}
+            />
             {customers.length > 0 ? (
-              customers.map((customer) => (
-                <article key={customer.id} className={editorCardClassName}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="text-base font-semibold text-slate-950">
-                        {customer.name}
-                      </p>
-                      <p className="text-sm text-slate-500">{customer.phone}</p>
-                    </div>
-                    <a
-                      href={buildCustomerHref(filters, customer.id)}
-                      className={[
-                        "inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition",
-                        selectedCustomer?.id === customer.id
-                          ? "border-slate-950 bg-slate-950 text-white"
-                          : "border-slate-950/12 text-slate-700 hover:bg-slate-100",
-                      ].join(" ")}
-                    >
-                      {selectedCustomer?.id === customer.id ? "열람 중" : "상세 보기"}
-                    </a>
-                  </div>
+              <div className="overflow-x-auto rounded-lg border border-stone-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-stone-50 text-[0.7rem] uppercase tracking-[0.18em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">고객</th>
+                      <th className="px-4 py-3 font-semibold">현재 통신사</th>
+                      <th className="px-4 py-3 font-semibold">판매 이력</th>
+                      <th className="px-4 py-3 font-semibold">미수 잔액</th>
+                      <th className="px-4 py-3 font-semibold">최근 방문</th>
+                      <th className="px-4 py-3 text-right font-semibold">상세</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-200 bg-white">
+                    {customers.map((customer) => {
+                      const isSelected = selectedCustomer?.id === customer.id;
 
-                  <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                    <p>통신사 {customer.currentCarrierName ?? "미지정"}</p>
-                    <p>판매 이력 {customer.salesCount}건</p>
-                    <p>미수 잔액 {formatWon(customer.receivableBalance)}</p>
-                    <p>
-                      최근 방문{" "}
-                      {customer.lastVisitAt
-                        ? customer.lastVisitAt.toLocaleDateString("ko-KR")
-                        : "없음"}
-                    </p>
-                  </div>
-                </article>
-              ))
+                      return (
+                        <tr
+                          key={customer.id}
+                          className={isSelected ? "bg-blue-50/70" : "hover:bg-stone-50/70"}
+                        >
+                          <td className="px-4 py-3.5 align-top">
+                            <div className="space-y-1">
+                              <p className="font-semibold text-slate-950">
+                                {customer.name}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {customer.phone}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 align-top text-slate-600">
+                            {customer.currentCarrierName ?? "미정"}
+                          </td>
+                          <td className="px-4 py-3.5 align-top text-slate-600">
+                            {customer.salesCount}건
+                          </td>
+                          <td className="px-4 py-3.5 align-top">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-medium text-slate-900 [font-variant-numeric:tabular-nums]">
+                                {formatWon(customer.receivableBalance)}
+                              </span>
+                              <TonePill
+                                label={customer.receivableBalance > 0 ? "미수 있음" : "정상"}
+                                tone={getReceivableSummaryTone(customer.receivableBalance)}
+                              />
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 align-top text-slate-600">
+                            {customer.lastVisitAt
+                              ? customer.lastVisitAt.toLocaleDateString("ko-KR")
+                              : "없음"}
+                          </td>
+                          <td className="px-4 py-3.5 text-right align-top">
+                            <a
+                              href={buildCustomerHref(filters, pagination.page, customer.id)}
+                              className={[
+                                `${secondaryButtonClassName} h-9 px-3.5`,
+                                isSelected
+                                  ? "border-blue-700 bg-blue-700 text-white hover:border-blue-800 hover:bg-blue-800"
+                                  : "",
+                              ].join(" ")}
+                            >
+                              {isSelected ? "열람 중" : "상세 보기"}
+                            </a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <EmptyState message="현재 조건에 맞는 고객이 없습니다." />
             )}
@@ -385,7 +462,7 @@ export function CustomersOverview({
                     {selectedCustomer.name}
                   </p>
                   <TonePill
-                    label={selectedCustomer.currentCarrierName ?? "통신사 미지정"}
+                    label={selectedCustomer.currentCarrierName ?? "통신사 미정"}
                     tone="teal"
                   />
                 </div>
@@ -408,13 +485,8 @@ export function CustomersOverview({
 
               <section className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    판매 이력
-                  </h3>
-                  <TonePill
-                    label={`${selectedCustomer.sales.length}건`}
-                    tone="amber"
-                  />
+                  <h3 className="text-sm font-semibold text-slate-900">판매 이력</h3>
+                  <TonePill label={`${selectedCustomer.sales.length}건`} tone="amber" />
                 </div>
                 {selectedCustomer.sales.length > 0 ? (
                   selectedCustomer.sales.map((sale) => (
@@ -428,10 +500,10 @@ export function CustomersOverview({
                         </span>
                       </div>
                       <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                        <p>요금제 {sale.ratePlanName ?? "미지정"}</p>
+                        <p>요금제 {sale.ratePlanName ?? "미정"}</p>
                         <p>판매가 {formatWon(sale.finalSalePrice)}</p>
                         <p>미수금 {formatWon(sale.receivableAmount)}</p>
-                        <p>담당 {sale.staffName}</p>
+                        <p>담당자 {sale.staffName}</p>
                       </div>
                     </article>
                   ))
@@ -442,9 +514,7 @@ export function CustomersOverview({
 
               <section className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    미수금 이력
-                  </h3>
+                  <h3 className="text-sm font-semibold text-slate-900">미수금 이력</h3>
                   <TonePill
                     label={`${selectedCustomer.receivables.length}건`}
                     tone="slate"
@@ -479,7 +549,7 @@ export function CustomersOverview({
               </section>
             </div>
           ) : (
-            <EmptyState message="고객을 선택하면 판매 이력과 미수금 이력이 여기에 표시됩니다." />
+            <EmptyState message="고객을 선택하면 판매 이력과 미수금 이력이 여기 표시됩니다." />
           )}
         </Panel>
       </section>

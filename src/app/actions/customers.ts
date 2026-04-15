@@ -24,6 +24,8 @@ function readOptionalDate(formData: FormData, key: string) {
 
 function revalidateCustomerViews() {
   revalidatePath("/customers");
+  revalidatePath("/sales");
+  revalidatePath("/sales/new");
 }
 
 async function ensureUniquePhone(id: string | null, normalizedPhone: string) {

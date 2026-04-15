@@ -1,25 +1,32 @@
 import type { ComponentProps, ReactNode } from "react";
 
+import {
+  DateControl,
+  SelectControl,
+} from "@/components/workspace/form-client-controls";
 import { TonePill } from "@/components/workspace/workspace-primitives";
+import {
+  dateControlClassName,
+  formControlClassName,
+  joinClassNames,
+  primaryButtonClassName,
+  secondaryButtonClassName,
+  selectControlClassName,
+} from "@/components/workspace/ui-classnames";
 
-const controlClassName =
-  "w-full rounded-[1.15rem] border border-slate-950/12 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200";
-
-function joinClassNames(...values: Array<string | undefined>) {
-  return values.filter(Boolean).join(" ");
-}
-
-interface FormFieldProps extends ComponentProps<"input"> {
+interface FieldLayoutProps {
   label: string;
+  helper?: string;
   wrapperClassName?: string;
+  children: ReactNode;
 }
 
-export function FormField({
+function FieldLayout({
   label,
+  helper,
   wrapperClassName,
-  className,
-  ...props
-}: FormFieldProps) {
+  children,
+}: FieldLayoutProps) {
   return (
     <label
       className={joinClassNames(
@@ -28,69 +35,181 @@ export function FormField({
       )}
     >
       <span>{label}</span>
-      <input className={joinClassNames(controlClassName, className)} {...props} />
+      {children}
+      {helper ? <span className="block text-xs leading-5 text-slate-500">{helper}</span> : null}
     </label>
+  );
+}
+
+interface FormFieldProps extends ComponentProps<"input"> {
+  label: string;
+  helper?: string;
+  wrapperClassName?: string;
+}
+
+export function FormField({
+  label,
+  helper,
+  wrapperClassName,
+  className,
+  ...props
+}: FormFieldProps) {
+  if (props.type === "date") {
+    return (
+      <FieldLayout
+        label={label}
+        helper={helper}
+        wrapperClassName={wrapperClassName}
+      >
+        <DateControl
+          aria-label={label}
+          className={joinClassNames(
+            dateControlClassName,
+            className,
+          )}
+          {...props}
+        />
+      </FieldLayout>
+    );
+  }
+
+  return (
+    <FieldLayout
+      label={label}
+      helper={helper}
+      wrapperClassName={wrapperClassName}
+    >
+      <input
+        className={joinClassNames(
+          formControlClassName,
+          className,
+        )}
+        aria-label={label}
+        {...props}
+      />
+    </FieldLayout>
   );
 }
 
 interface FormSelectProps extends ComponentProps<"select"> {
   label: string;
+  helper?: string;
   wrapperClassName?: string;
   children: ReactNode;
 }
 
 export function FormSelect({
   label,
+  helper,
   wrapperClassName,
   className,
   children,
   ...props
 }: FormSelectProps) {
   return (
-    <label
-      className={joinClassNames(
-        "space-y-2 text-sm font-medium text-slate-700",
-        wrapperClassName,
-      )}
+    <FieldLayout
+      label={label}
+      helper={helper}
+      wrapperClassName={wrapperClassName}
     >
-      <span>{label}</span>
-      <select
-        className={joinClassNames(controlClassName, className)}
+      <SelectControl
+        aria-label={label}
+        className={joinClassNames(
+          selectControlClassName,
+          className,
+        )}
         {...props}
       >
         {children}
-      </select>
-    </label>
+      </SelectControl>
+    </FieldLayout>
   );
 }
 
 interface FormTextAreaProps extends ComponentProps<"textarea"> {
   label: string;
+  helper?: string;
   wrapperClassName?: string;
 }
 
 export function FormTextArea({
   label,
+  helper,
   wrapperClassName,
   className,
   ...props
 }: FormTextAreaProps) {
   return (
-    <label
-      className={joinClassNames(
-        "space-y-2 text-sm font-medium text-slate-700",
-        wrapperClassName,
-      )}
+    <FieldLayout
+      label={label}
+      helper={helper}
+      wrapperClassName={wrapperClassName}
     >
-      <span>{label}</span>
       <textarea
         className={joinClassNames(
-          `${controlClassName} min-h-28 resize-y`,
+          `${formControlClassName} min-h-28 resize-y`,
           className,
         )}
+        aria-label={label}
         {...props}
       />
-    </label>
+    </FieldLayout>
+  );
+}
+
+type PhoneFieldProps = Omit<
+  FormFieldProps,
+  "type" | "inputMode" | "pattern"
+>;
+
+export function PhoneField(props: PhoneFieldProps) {
+  return (
+    <FormField
+      type="tel"
+      inputMode="numeric"
+      maxLength={13}
+      pattern="[0-9-]*"
+      placeholder="010-1234-5678"
+      helper="숫자만 입력해도 저장 시 자동으로 하이픈 형식으로 정리됩니다."
+      {...props}
+    />
+  );
+}
+
+type ImeiFieldProps = Omit<
+  FormFieldProps,
+  "type" | "inputMode" | "pattern"
+>;
+
+export function ImeiField(props: ImeiFieldProps) {
+  return (
+    <FormField
+      type="text"
+      inputMode="numeric"
+      maxLength={15}
+      pattern="[0-9]{15}"
+      placeholder="15자리 숫자"
+      helper="IMEI는 숫자 15자리만 저장합니다."
+      {...props}
+    />
+  );
+}
+
+type CurrencyFieldProps = Omit<
+  FormFieldProps,
+  "type" | "inputMode" | "step" | "pattern"
+>;
+
+export function CurrencyField(props: CurrencyFieldProps) {
+  return (
+    <FormField
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      placeholder="숫자만 입력"
+      helper="쉼표 없이 숫자만 입력합니다."
+      {...props}
+    />
   );
 }
 
@@ -108,7 +227,7 @@ export function SubmitButton({
     <button
       type={type}
       className={joinClassNames(
-        "inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800",
+        `${primaryButtonClassName} h-10 px-4`,
         className,
       )}
       {...props}
@@ -132,12 +251,12 @@ export function ToggleActiveButton({
     <button
       type={type}
       className={joinClassNames(
-        "inline-flex items-center justify-center rounded-full border border-slate-950/12 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100",
+        `${secondaryButtonClassName} h-10 px-4`,
         className,
       )}
       {...props}
     >
-      {isActive ? "비활성화" : "재활성화"}
+      {isActive ? "비활성화" : "활성화"}
     </button>
   );
 }
@@ -153,8 +272,16 @@ export function ActiveStatePill({ isActive }: { isActive: boolean }) {
 
 export function EmptyState({ message }: { message: string }) {
   return (
-    <p className="rounded-[1.2rem] border border-dashed border-slate-300 bg-stone-50/75 px-4 py-5 text-sm leading-6 text-slate-500">
+    <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-5 text-sm leading-6 text-slate-500">
       {message}
     </p>
+  );
+}
+
+export function NoticeBanner({ message }: { message: string }) {
+  return (
+    <section className="rounded-lg border border-rose-200 bg-rose-50/85 px-5 py-4 text-sm leading-6 text-rose-900">
+      {message}
+    </section>
   );
 }

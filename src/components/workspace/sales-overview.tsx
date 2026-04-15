@@ -1,17 +1,21 @@
-import { cancelSaleAction } from "@/app/actions/sales";
-import { EmptyState } from "@/components/workspace/admin-form-controls";
-import { SalesEntryForm } from "@/components/workspace/sales-entry-form";
+import { EmptyState, NoticeBanner } from "@/components/workspace/admin-form-controls";
+import { SalesFilterBar } from "@/components/workspace/sales-filter-bar";
+import { SalesHistoryTable } from "@/components/workspace/sales-history-table";
+import { SalesLauncher } from "@/components/workspace/sales-launcher";
+import { SalesPaginationControls } from "@/components/workspace/sales-pagination-controls";
 import type {
-  DiscountMethodValue,
-  RevenueCalculationMethodValue,
   SalesAvailableInventoryRecord,
   SalesCarrierRecord,
   SalesCustomerRecord,
   SalesDiscountPolicyRecord,
+  SalesFilters,
+  SalesMetrics,
   SalesNotice,
+  SalesPagination,
   SalesRebatePolicyRecord,
   SalesRecord,
   SalesSaleProfitPolicyRecord,
+  SalesStoreRecord,
 } from "@/components/workspace/sales-types";
 import {
   ActionChip,
@@ -20,121 +24,164 @@ import {
   Panel,
   TonePill,
 } from "@/components/workspace/workspace-primitives";
-import { formatKstDate, formatKstDateRange } from "@/lib/date-utils";
+import { joinClassNames } from "@/components/workspace/ui-classnames";
 import { formatWon } from "@/lib/formatters";
 
 const noticeMessageMap: Record<SalesNotice, string> = {
   "invalid-sale-form":
-    "판매 등록 값이 비어 있거나 잘못되었습니다. 고객, 재고, 금액 입력값을 다시 확인하세요.",
+    "판매 등록 값이 비어 있거나 올바르지 않습니다. 고객, 재고, 금액 입력값을 다시 확인해 주세요.",
   "sale-customer-not-found":
-    "선택한 고객을 찾지 못했습니다. 고객 목록에서 다시 선택한 뒤 시도하세요.",
+    "선택한 고객을 찾지 못했습니다. 고객 목록에서 다시 선택한 뒤 재시도해 주세요.",
   "sale-inventory-unavailable":
-    "선택한 재고를 지금은 판매할 수 없습니다. 이미 판매되었거나 숨김 처리되었는지 확인하세요.",
+    "선택한 재고는 지금 판매할 수 없습니다. 이미 판매되었거나 출고 처리되었는지 확인해 주세요.",
   "sale-rate-plan-mismatch":
     "선택한 요금제가 현재 재고 통신사와 맞지 않습니다.",
   "sale-service-mismatch":
     "선택한 부가서비스 중 현재 통신사에서 사용할 수 없는 항목이 있습니다.",
   "sale-overpayment":
-    "수납 금액 합계가 최종 판매가를 초과했습니다. 결제 입력값을 다시 확인하세요.",
+    "수납 금액 합계가 최종 판매가를 초과했습니다. 결제 입력값을 다시 확인해 주세요.",
   "sale-discount-rule-missing":
     "할인 적용을 선택했지만 매칭 정책이나 수동 할인값이 없습니다.",
   "sale-not-found":
-    "대상 판매 건을 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도하세요.",
+    "대상 판매 건을 찾지 못했습니다. 목록에서 다시 확인한 뒤 재시도해 주세요.",
   "sale-cancel-blocked":
     "수납 이력이 있는 판매 건은 취소할 수 없습니다.",
 };
 
 const editorCardClassName =
-  "rounded-[1.35rem] border border-slate-950/8 bg-stone-50/85 p-4 shadow-[0_12px_36px_-30px_rgba(15,23,42,0.35)]";
+  "rounded-[1.4rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.96)_100%)] p-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.24)]";
 
-function toDate(value: string) {
-  return new Date(value);
-}
-
-function getDiscountValueLabel(
-  method: DiscountMethodValue | null,
-  value: number | null,
+function appendSalesFilterParams(
+  searchParams: URLSearchParams,
+  filters: SalesFilters,
 ) {
-  if (!method || value === null) {
-    return "미적용";
+  if (filters.q) {
+    searchParams.set("q", filters.q);
   }
 
-  return method === "PERCENTAGE" ? `${value}%` : formatWon(value);
-}
-
-function getSaleDiscountLabel(sale: SalesRecord) {
-  if (!sale.discountApplied) {
-    return "미적용";
+  if (filters.carrierId) {
+    searchParams.set("carrierId", filters.carrierId);
   }
 
-  return getDiscountValueLabel(sale.discountMethod, sale.discountValue);
-}
+  if (filters.storeId) {
+    searchParams.set("storeId", filters.storeId);
+  }
 
-function getSaleProfitLabel(
-  method: RevenueCalculationMethodValue,
-  value: number,
-) {
-  switch (method) {
-    case "PERCENTAGE":
-      return `판매가 ${value}%`;
-    case "FIXED_AMOUNT":
-      return formatWon(value);
-    default:
-      return "없음";
+  if (filters.status !== "all") {
+    searchParams.set("status", filters.status);
   }
 }
 
-function getDiscountPolicyLabel(policy: SalesDiscountPolicyRecord) {
-  const targetLabel =
-    policy.target === "CARRIER"
-      ? (policy.carrierName ?? "통신사 기준")
-      : (policy.deviceModelName ?? "단말 기준");
+function buildSalesHref(filters: SalesFilters, page: number) {
+  const searchParams = new URLSearchParams();
 
-  return `${targetLabel} / ${getDiscountValueLabel(
-    policy.discountMethod,
-    policy.discountValue,
-  )}`;
+  appendSalesFilterParams(searchParams, filters);
+
+  if (page > 1) {
+    searchParams.set("page", String(page));
+  }
+
+  const query = searchParams.toString();
+  return query ? `/sales?${query}` : "/sales";
 }
 
-function getSaleStatusTone(status: SalesRecord["status"]) {
-  return status === "COMPLETED" ? "teal" : "rose";
-}
-
-function getSaleStatusLabel(status: SalesRecord["status"]) {
-  return status === "COMPLETED" ? "완료" : "취소";
-}
-
-function getReceivableTone(status: SalesRecord["receivableStatus"]) {
+function getSalesStatusFilterLabel(status: SalesFilters["status"]) {
   switch (status) {
-    case "UNPAID":
-      return "rose";
-    case "PARTIALLY_PAID":
-      return "amber";
-    case "PAID":
-      return "teal";
+    case "COMPLETED":
+      return "완료 판매";
+    case "CANCELED":
+      return "취소 이력";
     default:
-      return "slate";
+      return "전체 기록";
   }
 }
 
-function getReceivableLabel(status: SalesRecord["receivableStatus"]) {
-  switch (status) {
-    case "UNPAID":
-      return "미납";
-    case "PARTIALLY_PAID":
-      return "부분수납";
-    case "PAID":
-      return "완납";
-    default:
-      return "없음";
-  }
+function LegendIcon({
+  className,
+  children,
+}: {
+  className: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={joinClassNames(
+        "inline-flex h-8 w-8 items-center justify-center rounded-full border",
+        className,
+      )}
+      aria-hidden="true"
+    >
+      {children}
+    </span>
+  );
+}
+
+function DetailIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 20 20">
+      <path
+        d="M10 4.5c-4 0-6.83 3.15-7.75 5.5.92 2.35 3.75 5.5 7.75 5.5s6.83-3.15 7.75-5.5c-.92-2.35-3.75-5.5-7.75-5.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+      <circle cx="10" cy="10" r="2.25" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+function CancelIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 20 20">
+      <path
+        d="M6 6 14 14M14 6l-8 8"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function CustomerIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 20 20">
+      <path
+        d="M10 10.5a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5ZM4.75 16c.8-2.3 2.88-3.75 5.25-3.75S14.45 13.7 15.25 16"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
+
+function StaffIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 20 20">
+      <path
+        d="M10 3.75 12 7.9l4.6.68-3.3 3.2.78 4.52L10 14.1l-4.08 2.2.78-4.52-3.3-3.2L8 7.9l2-4.15Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
 }
 
 export interface SalesOverviewProps {
   currentUserName: string;
   defaultSaleDate: string;
   notice: SalesNotice | null;
+  filters: SalesFilters;
+  pagination: SalesPagination;
+  metrics: SalesMetrics;
   customers: SalesCustomerRecord[];
+  stores: SalesStoreRecord[];
   carriers: SalesCarrierRecord[];
   rebatePolicies: SalesRebatePolicyRecord[];
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
@@ -147,7 +194,11 @@ export function SalesOverview({
   currentUserName,
   defaultSaleDate,
   notice,
+  filters,
+  pagination,
+  metrics,
   customers,
+  stores,
   carriers,
   rebatePolicies,
   saleProfitPolicies,
@@ -160,411 +211,162 @@ export function SalesOverview({
     0,
   );
   const activeServiceCount = new Set(
-    carriers.flatMap((carrier) => carrier.addOnServices.map((service) => service.id)),
+    carriers.flatMap((carrier) =>
+      carrier.addOnServices.map((service) => service.id),
+    ),
   ).size;
   const totalPolicyCount =
     rebatePolicies.length + saleProfitPolicies.length + discountPolicies.length;
-  const completedSales = sales.filter((sale) => sale.status === "COMPLETED");
-  const recentRevenue = completedSales.reduce(
-    (total, sale) => total + sale.finalSalePrice,
-    0,
-  );
-  const outstandingSalesCount = sales.filter(
-    (sale) => sale.receivableBalance > 0,
-  ).length;
-  const inventoryPreview = availableInventory.slice(0, 12);
+  const filterTone =
+    filters.status === "all"
+      ? "slate"
+      : filters.status === "COMPLETED"
+        ? "teal"
+        : "rose";
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="space-y-5 p-4 sm:p-5 lg:p-6">
       <PageIntro
         eyebrow="Sales"
-        title="판매 입력, 할인 계산, 취소 처리까지 같은 흐름으로 묶었습니다."
-        description="판매 등록 시 고객, 재고, 통신사 기준 정책을 함께 확인하고 최종 판매가, 미수금, 정책 수익을 즉시 계산합니다. 저장 시에는 서버가 같은 계산식으로 다시 검증해 재고와 고객 상태를 함께 갱신합니다."
+        title="판매 이력과 취소 처리를 빠르게 정리합니다"
         actions={
           <>
             <ActionChip label={`담당 ${currentUserName}`} tone="dark" />
-            <ActionChip label={`정책 ${totalPolicyCount}건`} />
+            <ActionChip label={`조회 ${pagination.totalCount}건`} />
+            <SalesLauncher
+              availableInventory={availableInventory}
+              carriers={carriers}
+              currentUserName={currentUserName}
+              customers={customers}
+              defaultSaleDate={defaultSaleDate}
+              discountPolicies={discountPolicies}
+              rebatePolicies={rebatePolicies}
+              saleProfitPolicies={saleProfitPolicies}
+            />
           </>
         }
       />
 
-      {notice ? (
-        <section className="rounded-[1.4rem] border border-rose-200 bg-rose-50/85 px-5 py-4 text-sm leading-6 text-rose-900">
-          {noticeMessageMap[notice]}
-        </section>
-      ) : null}
+      {notice ? <NoticeBanner message={noticeMessageMap[notice]} /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="판매 가능 재고"
           value={`${availableInventory.length}대`}
-          helper="숨김 처리되지 않은 입고 상태 재고만 판매 폼에 노출합니다."
+          helper="즉시 판매 가능한 재고"
           accent="amber"
         />
         <MetricCard
           label="활성 요금제 / 서비스"
           value={`${activeRatePlanCount} / ${activeServiceCount}`}
-          helper="통신사 기준 선택값과 공통 부가서비스를 함께 보여줍니다."
+          helper="현재 기준으로 적용 중"
           accent="teal"
         />
         <MetricCard
-          label="최근 완료 매출"
-          value={formatWon(recentRevenue)}
-          helper={`최근 목록 완료 건 ${completedSales.length}건 기준 합계입니다.`}
+          label="필터 완료 매출"
+          value={formatWon(metrics.completedRevenue)}
+          helper={`완료 ${metrics.completedCount}건`}
           accent="slate"
         />
         <MetricCard
-          label="미수금 진행 건"
-          value={`${outstandingSalesCount}건`}
-          helper="부분 수납 또는 미납 상태가 남아 있는 판매 건 수입니다."
+          label="미수 진행 건"
+          value={`${metrics.outstandingCount}건`}
+          helper={`정책 ${totalPolicyCount}건 연결`}
           accent="amber"
         />
       </section>
 
-      <Panel
-        title="판매 등록"
-        description="고객, 재고, 정책 매칭을 기준으로 새 판매를 저장합니다. 미수금이 남으면 자동으로 receivable이 생성되고, 재고와 고객 현재 통신사도 함께 갱신됩니다."
-      >
-        <SalesEntryForm
-          currentUserName={currentUserName}
-          defaultSaleDate={defaultSaleDate}
-          customers={customers}
-          carriers={carriers}
-          availableInventory={availableInventory}
-          discountPolicies={discountPolicies}
-          rebatePolicies={rebatePolicies}
-          saleProfitPolicies={saleProfitPolicies}
-        />
-      </Panel>
-
-      <section className="grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
-        <Panel
-          title="판매 선택값"
-          description="통신사별 실제 활성 요금제와 부가서비스를 한 번에 확인할 수 있습니다."
-        >
-          <div className="space-y-4">
-            {carriers.map((carrier) => (
-              <article key={carrier.id} className={editorCardClassName}>
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-base font-semibold text-slate-950">
-                    {carrier.name}
-                  </p>
-                  <TonePill label={carrier.code} tone="teal" />
-                </div>
-
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      요금제
-                    </p>
-                    <ul className="space-y-2">
-                      {carrier.ratePlans.length > 0 ? (
-                        carrier.ratePlans.map((ratePlan) => (
-                          <li
-                            key={ratePlan.id}
-                            className="rounded-[1rem] border border-white/70 bg-white px-3 py-2 text-sm text-slate-700"
-                          >
-                            <span className="font-medium text-slate-900">
-                              {ratePlan.name}
-                            </span>
-                            <span className="ml-2 text-slate-500">
-                              {formatWon(ratePlan.monthlyFee)}
-                            </span>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="rounded-[1rem] border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-500">
-                          활성 요금제가 없습니다.
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      부가서비스
-                    </p>
-                    <ul className="space-y-2">
-                      {carrier.addOnServices.length > 0 ? (
-                        carrier.addOnServices.map((service) => (
-                          <li
-                            key={service.id}
-                            className="rounded-[1rem] border border-white/70 bg-white px-3 py-2 text-sm text-slate-700"
-                          >
-                            <span className="font-medium text-slate-900">
-                              {service.name}
-                            </span>
-                            <span className="ml-2 text-slate-500">
-                              {service.monthlyFee !== null
-                                ? formatWon(service.monthlyFee)
-                                : "요금 미정"}
-                            </span>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="rounded-[1rem] border border-dashed border-slate-300 bg-white px-3 py-2 text-sm text-slate-500">
-                          활성 부가서비스가 없습니다.
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                </div>
-              </article>
-            ))}
+      <Panel title="판매 조회 필터">
+        <div className={`${editorCardClassName} space-y-3`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-950">
+                상태는 완료 판매와 취소 이력을 구분합니다.
+              </p>
+              <p className="text-sm text-slate-500">
+                날짜와 적용 버튼은 제거했고, 값이 바뀌면 필터가 자동으로 반영됩니다.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <TonePill label={`전체 ${pagination.totalCount}건`} tone="slate" />
+              <TonePill
+                label={`상태 ${getSalesStatusFilterLabel(filters.status)}`}
+                tone={filterTone}
+              />
+              {filters.carrierId ? (
+                <TonePill label="통신사 필터 적용" tone="teal" />
+              ) : null}
+              {filters.storeId ? (
+                <TonePill label="매장 필터 적용" tone="teal" />
+              ) : null}
+            </div>
           </div>
-        </Panel>
 
-        <Panel
-          title="현재 등록된 정책"
-          description="리베이트, 판매 수익, 할인 정책을 같은 화면에서 검토하고 판매 입력 시 자동 매칭합니다."
-        >
-          <div className="space-y-4">
-            <section className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  리베이트 정책
-                </h3>
-                <TonePill label={`${rebatePolicies.length}건`} tone="amber" />
-              </div>
-              {rebatePolicies.map((policy) => (
-                <article
-                  key={policy.id}
-                  className="rounded-[1rem] border border-slate-950/8 bg-amber-50/70 px-4 py-3 text-sm text-slate-700"
-                >
-                  <p className="font-semibold text-slate-950">{policy.name}</p>
-                  <p className="mt-1">
-                    {policy.carrierName} / {policy.deviceModelName}
-                  </p>
-                  <p className="mt-1 text-slate-500">
-                    {formatWon(policy.defaultRebateAmount)} /{" "}
-                    {formatKstDateRange(
-                      toDate(policy.startsAt),
-                      toDate(policy.endsAt),
-                    )}
-                  </p>
-                </article>
-              ))}
-            </section>
-
-            <section className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  판매수익 정책
-                </h3>
-                <TonePill label={`${saleProfitPolicies.length}건`} tone="teal" />
-              </div>
-              {saleProfitPolicies.map((policy) => (
-                <article
-                  key={policy.id}
-                  className="rounded-[1rem] border border-slate-950/8 bg-teal-50/70 px-4 py-3 text-sm text-slate-700"
-                >
-                  <p className="font-semibold text-slate-950">{policy.name}</p>
-                  <p className="mt-1">{policy.carrierName}</p>
-                  <p className="mt-1 text-slate-500">
-                    {getSaleProfitLabel(
-                      policy.calculationMethod,
-                      policy.calculationValue,
-                    )}{" "}
-                    /{" "}
-                    {formatKstDateRange(
-                      toDate(policy.startsAt),
-                      toDate(policy.endsAt),
-                    )}
-                  </p>
-                </article>
-              ))}
-            </section>
-
-            <section className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  할인 정책
-                </h3>
-                <TonePill label={`${discountPolicies.length}건`} tone="slate" />
-              </div>
-              {discountPolicies.map((policy) => (
-                <article
-                  key={policy.id}
-                  className="rounded-[1rem] border border-slate-950/8 bg-slate-50/85 px-4 py-3 text-sm text-slate-700"
-                >
-                  <p className="font-semibold text-slate-950">{policy.name}</p>
-                  <p className="mt-1">{getDiscountPolicyLabel(policy)}</p>
-                  <p className="mt-1 text-slate-500">
-                    {formatKstDateRange(
-                      toDate(policy.startsAt),
-                      toDate(policy.endsAt),
-                    )}
-                  </p>
-                </article>
-              ))}
-            </section>
-          </div>
-        </Panel>
-      </section>
-
-      <Panel
-        title="판매 가능 재고"
-        description={`현재 판매 가능한 재고 ${availableInventory.length}대 중 최근 입고 순으로 최대 12대를 보여줍니다.`}
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {inventoryPreview.length > 0 ? (
-            inventoryPreview.map((item) => (
-              <article
-                key={item.id}
-                className="rounded-[1.15rem] border border-slate-950/8 bg-stone-50/80 px-4 py-3"
-              >
-                <p className="font-semibold text-slate-950">
-                  {item.carrierName} {item.deviceModelName}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {item.color} / {item.capacity}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">IMEI {item.imei}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  원가 {formatWon(item.costAmount)}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  입고일 {formatKstDate(toDate(item.receivedAt))}
-                </p>
-              </article>
-            ))
-          ) : (
-            <EmptyState message="현재 판매 가능한 재고가 없습니다." />
-          )}
+          <SalesFilterBar
+            carriers={carriers.map((carrier) => ({
+              id: carrier.id,
+              name: carrier.name,
+            }))}
+            filters={filters}
+            stores={stores}
+          />
         </div>
       </Panel>
 
-      <Panel
-        title="최근 판매 이력"
-        description="완료/취소 상태, 할인 적용, 리베이트, 정책 수익, 미수금 현재 잔액을 함께 확인합니다. 수납 이력이 없는 완료 건만 취소할 수 있습니다."
-      >
-        {sales.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                <tr>
-                  <th className="pb-3 font-semibold">판매일 / 상태</th>
-                  <th className="pb-3 font-semibold">고객 / 담당</th>
-                  <th className="pb-3 font-semibold">상품</th>
-                  <th className="pb-3 font-semibold">최종 판매가</th>
-                  <th className="pb-3 font-semibold">할인</th>
-                  <th className="pb-3 font-semibold">리베이트 / 수익</th>
-                  <th className="pb-3 font-semibold">미수금</th>
-                  <th className="pb-3 font-semibold">취소 처리</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/80">
-                {sales.map((sale) => (
-                  <tr key={sale.id}>
-                    <td className="py-4 pr-4 align-top text-slate-500">
-                      <p>{formatKstDate(toDate(sale.saleDate))}</p>
-                      <div className="mt-2">
-                        <TonePill
-                          label={getSaleStatusLabel(sale.status)}
-                          tone={getSaleStatusTone(sale.status)}
-                        />
-                      </div>
-                    </td>
-                    <td className="py-4 pr-4 align-top">
-                      <p className="font-semibold text-slate-950">
-                        {sale.customerName}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        담당 {sale.staffName}
-                      </p>
-                    </td>
-                    <td className="py-4 pr-4 align-top">
-                      <p className="font-medium text-slate-800">
-                        {sale.carrierName} {sale.deviceModelName}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {sale.ratePlanName ?? "요금제 미선택"}
-                        {sale.selectedServices.length > 0
-                          ? ` / ${sale.selectedServices.join(", ")}`
-                          : ""}
-                      </p>
-                    </td>
-                    <td className="py-4 pr-4 align-top font-medium text-slate-900">
-                      {formatWon(sale.finalSalePrice)}
-                    </td>
-                    <td className="py-4 pr-4 align-top text-slate-600">
-                      <p>{getSaleDiscountLabel(sale)}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {sale.appliedDiscountPolicyName ?? "수동 입력 또는 미적용"}
-                      </p>
-                    </td>
-                    <td className="py-4 pr-4 align-top">
-                      <p className="font-medium text-amber-800">
-                        리베이트 {formatWon(sale.rebateAmount)}
-                      </p>
-                      <p className="mt-1 font-medium text-teal-800">
-                        정책 수익 {formatWon(sale.policyRevenueAmount)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {sale.appliedRebatePolicyName ?? "리베이트 정책 없음"}
-                        {" / "}
-                        {sale.appliedSaleProfitPolicyName ?? "판매수익 정책 없음"}
-                      </p>
-                    </td>
-                    <td className="py-4 pr-4 align-top">
-                      <p className="font-medium text-slate-900">
-                        {formatWon(sale.receivableBalance)}
-                      </p>
-                      <div className="mt-2">
-                        <TonePill
-                          label={getReceivableLabel(sale.receivableStatus)}
-                          tone={getReceivableTone(sale.receivableStatus)}
-                        />
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        원시 미수 {formatWon(sale.receivableAmount)}
-                      </p>
-                    </td>
-                    <td className="py-4 align-top">
-                      {sale.status === "COMPLETED" ? (
-                        sale.canCancel ? (
-                          <form action={cancelSaleAction} className="space-y-2">
-                            <input type="hidden" name="saleId" value={sale.id} />
-                            <input
-                              type="text"
-                              name="cancellationReason"
-                              placeholder="취소 사유(선택)"
-                              className="w-full rounded-[0.95rem] border border-slate-950/12 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
-                            />
-                            <button
-                              type="submit"
-                              className="inline-flex items-center justify-center rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-900 transition hover:bg-rose-100"
-                            >
-                              판매 취소
-                            </button>
-                          </form>
-                        ) : (
-                          <p className="text-sm leading-6 text-slate-500">
-                            {sale.hasPayments
-                              ? "수납 이력이 있어 취소할 수 없습니다."
-                              : "취소할 수 없는 상태입니다."}
-                          </p>
-                        )
-                      ) : (
-                        <div className="space-y-1 text-sm leading-6 text-slate-500">
-                          <p>취소 완료</p>
-                          <p>
-                            {sale.canceledAt
-                              ? formatKstDate(toDate(sale.canceledAt))
-                              : "-"}
-                          </p>
-                          <p>{sale.cancellationReason ?? "사유 없음"}</p>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <Panel title="판매 이력">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-950">
+                기본 행은 한 줄 요약만 유지하고, 나머지 정보는 상세 모달에서 확인합니다.
+              </p>
+              <p className="text-sm text-slate-500">
+                페이지당 최대 10건씩 표시합니다.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 rounded-[1rem] border border-stone-200 bg-stone-50/90 px-3 py-2">
+              <span className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                아이콘 안내
+              </span>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <LegendIcon className="border-blue-200 bg-blue-50 text-blue-700">
+                  <DetailIcon />
+                </LegendIcon>
+                <span>상세 보기</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <LegendIcon className="border-rose-200 bg-rose-50 text-rose-700">
+                  <CancelIcon />
+                </LegendIcon>
+                <span>판매 취소</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <LegendIcon className="border-teal-200 bg-teal-50 text-teal-700">
+                  <CustomerIcon />
+                </LegendIcon>
+                <span>고객 정보 보기</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <LegendIcon className="border-amber-200 bg-amber-50 text-amber-700">
+                  <StaffIcon />
+                </LegendIcon>
+                <span>담당자 보기</span>
+              </div>
+            </div>
           </div>
-        ) : (
-          <EmptyState message="최근 판매 이력이 아직 없습니다." />
-        )}
+
+          <SalesPaginationControls
+            buildHref={(page) => buildSalesHref(filters, page)}
+            itemLabel="건"
+            pagination={pagination}
+          />
+
+          {sales.length > 0 ? (
+            <SalesHistoryTable sales={sales} />
+          ) : (
+            <EmptyState message="조건에 맞는 판매 이력이 없습니다." />
+          )}
+        </div>
       </Panel>
     </div>
   );

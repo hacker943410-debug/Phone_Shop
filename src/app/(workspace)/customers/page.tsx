@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 
 import { CustomersOverview } from "@/components/workspace/customers-overview";
+import { createPagination, readPageNumber } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
   title: "고객 관리",
 };
+
+const customersPageSize = 12;
 
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
@@ -29,6 +32,7 @@ export default async function CustomersPage({
     carrierId?: string | string[];
     receivable?: string | string[];
     customerId?: string | string[];
+    page?: string | string[];
     notice?: string | string[];
   }>;
 }) {
@@ -37,6 +41,7 @@ export default async function CustomersPage({
   const carrierId = readSearchParam(rawSearchParams.carrierId);
   const receivableValue = readSearchParam(rawSearchParams.receivable) || "all";
   const customerId = readSearchParam(rawSearchParams.customerId);
+  const requestedPage = readPageNumber(rawSearchParams.page);
   const noticeValue = readSearchParam(rawSearchParams.notice);
   const normalizedQuery = q.replace(/\D/g, "");
 
@@ -98,7 +103,14 @@ export default async function CustomersPage({
         : {}),
   };
 
-  const [carriers, customers, totalCount, outstandingCustomers, receivableAggregate] =
+  const [
+    carriers,
+    filteredCount,
+    totalCount,
+    outstandingCustomers,
+    receivableAggregate,
+    repeatCustomerGroups,
+  ] =
     await Promise.all([
       prisma.carrier.findMany({
         orderBy: [{ isActive: "desc" }, { name: "asc" }],
@@ -108,35 +120,8 @@ export default async function CustomersPage({
           isActive: true,
         },
       }),
-      prisma.customer.findMany({
+      prisma.customer.count({
         where,
-        orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
-        include: {
-          currentCarrier: {
-            select: {
-              name: true,
-            },
-          },
-          _count: {
-            select: {
-              sales: true,
-            },
-          },
-          receivables: {
-            select: {
-              balanceAmount: true,
-            },
-          },
-          sales: {
-            take: 1,
-            orderBy: {
-              saleDate: "desc",
-            },
-            select: {
-              saleDate: true,
-            },
-          },
-        },
       }),
       prisma.customer.count({
         where: {
@@ -168,7 +153,55 @@ export default async function CustomersPage({
           },
         },
       }),
+      prisma.sale.groupBy({
+        by: ["customerId"],
+        where: {
+          customer: where,
+        },
+        _count: {
+          _all: true,
+        },
+      }),
     ]);
+
+  const pagination = createPagination(
+    requestedPage,
+    filteredCount,
+    customersPageSize,
+  );
+
+  const customers = await prisma.customer.findMany({
+    where,
+    orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+    skip: (pagination.page - 1) * customersPageSize,
+    take: customersPageSize,
+    include: {
+      currentCarrier: {
+        select: {
+          name: true,
+        },
+      },
+      _count: {
+        select: {
+          sales: true,
+        },
+      },
+      receivables: {
+        select: {
+          balanceAmount: true,
+        },
+      },
+      sales: {
+        take: 1,
+        orderBy: {
+          saleDate: "desc",
+        },
+        select: {
+          saleDate: true,
+        },
+      },
+    },
+  });
 
   const selectedCustomerId = customers.some((customer) => customer.id === customerId)
     ? customerId
@@ -239,8 +272,8 @@ export default async function CustomersPage({
       })
     : null;
 
-  const repeatCustomerCount = customers.filter(
-    (customer) => customer._count.sales > 1,
+  const repeatCustomerCount = repeatCustomerGroups.filter(
+    (customerGroup) => customerGroup._count._all > 1,
   ).length;
 
   return (
@@ -299,9 +332,10 @@ export default async function CustomersPage({
         carrierId,
         receivable,
       }}
+      pagination={pagination}
       metrics={{
         totalCount,
-        filteredCount: customers.length,
+        filteredCount,
         outstandingCount: outstandingCustomers,
         repeatCustomerCount,
         receivableBalance: receivableAggregate._sum.balanceAmount ?? 0,

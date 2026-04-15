@@ -67,6 +67,21 @@ function revalidateReceivableViews() {
   revalidatePath("/receivables");
   revalidatePath("/customers");
   revalidatePath("/sales");
+  revalidatePath("/");
+}
+
+async function resolveDefaultStoreId() {
+  const defaultStore = await prisma.store.findFirst({
+    where: {
+      isActive: true,
+    },
+    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+    select: {
+      id: true,
+    },
+  });
+
+  return defaultStore?.id ?? null;
 }
 
 export async function recordPaymentAction(formData: FormData) {
@@ -82,6 +97,8 @@ export async function recordPaymentAction(formData: FormData) {
     redirectReceivableNotice("invalid-payment-form");
   }
 
+  const defaultStoreId = await resolveDefaultStoreId();
+
   try {
     await prisma.$transaction(async (tx) => {
       const receivable = await tx.receivable.findUnique({
@@ -91,6 +108,11 @@ export async function recordPaymentAction(formData: FormData) {
         select: {
           id: true,
           saleId: true,
+          sale: {
+            select: {
+              storeId: true,
+            },
+          },
           originalAmount: true,
           payments: {
             where: {
@@ -120,6 +142,7 @@ export async function recordPaymentAction(formData: FormData) {
         data: {
           receivableId: receivable.id,
           saleId: receivable.saleId,
+          storeId: receivable.sale.storeId ?? defaultStoreId,
           staffId: currentUser.id,
           paymentDate,
           amount,
@@ -158,12 +181,17 @@ export async function recordPaymentAction(formData: FormData) {
 }
 
 export async function cancelPaymentAction(formData: FormData) {
-  await requireCurrentUser();
+  const currentUser = await requireCurrentUser();
 
   const paymentId = readText(formData, "paymentId");
+  const cancellationReason = readOptionalText(formData, "cancellationReason");
 
   if (!paymentId) {
     redirectReceivableNotice("payment-not-found");
+  }
+
+  if (!cancellationReason) {
+    redirectReceivableNotice("payment-cancel-reason-required");
   }
 
   try {
@@ -189,6 +217,9 @@ export async function cancelPaymentAction(formData: FormData) {
         },
         data: {
           status: PaymentStatus.CANCELED,
+          canceledAt: new Date(),
+          canceledById: currentUser.id,
+          cancellationReason,
         },
       });
 

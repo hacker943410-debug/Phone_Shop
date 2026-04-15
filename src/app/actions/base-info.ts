@@ -33,6 +33,84 @@ function readInt(formData: FormData, key: string) {
 function revalidateBaseInfoViews() {
   revalidatePath("/settings/base");
   revalidatePath("/sales");
+  revalidatePath("/inventory");
+  revalidatePath("/");
+}
+
+export async function upsertStoreAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readOptionalText(formData, "id");
+  const code = readText(formData, "code").toUpperCase();
+  const name = readText(formData, "name");
+  const region = readOptionalText(formData, "region");
+
+  if (!code || !name) {
+    return;
+  }
+
+  if (id) {
+    await prisma.store.update({
+      where: { id },
+      data: { code, name, region },
+    });
+  } else {
+    const defaultStore = await prisma.store.findFirst({
+      where: { isDefault: true },
+      select: { id: true },
+    });
+
+    await prisma.store.create({
+      data: {
+        code,
+        name,
+        region,
+        isDefault: !defaultStore,
+      },
+    });
+  }
+
+  revalidateBaseInfoViews();
+}
+
+export async function toggleStoreActiveAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+  const nextActive = readText(formData, "nextActive") === "true";
+
+  if (!id) {
+    return;
+  }
+
+  await prisma.store.update({
+    where: { id },
+    data: { isActive: nextActive },
+  });
+
+  revalidateBaseInfoViews();
+}
+
+export async function setDefaultStoreAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+
+  if (!id) {
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.store.updateMany({
+      data: { isDefault: false },
+    }),
+    prisma.store.update({
+      where: { id },
+      data: { isDefault: true, isActive: true },
+    }),
+  ]);
+
+  revalidateBaseInfoViews();
 }
 
 export async function upsertCarrierAction(formData: FormData) {

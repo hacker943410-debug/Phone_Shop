@@ -1,3 +1,8 @@
+import {
+  formatActivationRuleLabel,
+  getActivationEligibleDate,
+  isActivationEligible,
+} from "@/lib/activation-rules";
 import { formatKstDate, formatKstDateRange, parseKstDateInput } from "@/lib/date-utils";
 import { prisma } from "@/lib/prisma";
 
@@ -13,6 +18,7 @@ export interface DashboardFilters {
   preset: DashboardPreset;
   dateFrom: string;
   dateTo: string;
+  storeId: string;
 }
 
 export interface DashboardMetric {
@@ -39,6 +45,21 @@ export interface DashboardStaffSummary {
   profitAmount: number;
 }
 
+export interface DashboardStoreSummary {
+  storeId: string;
+  storeName: string;
+  salesCount: number;
+  salesAmount: number;
+  collectedAmount: number;
+  additionalPaymentAmount: number;
+  profitAmount: number;
+}
+
+export interface DashboardStoreOption {
+  id: string;
+  name: string;
+}
+
 export interface DashboardDailySummary {
   date: string;
   salesCount: number;
@@ -62,6 +83,33 @@ export interface DashboardRecentSale {
   profitAmount: number;
 }
 
+export interface DashboardReceivableSnapshot {
+  customerName: string;
+  carrierName: string;
+  deviceModelName: string;
+  balanceAmount: number;
+}
+
+export interface DashboardActivationEligibleCustomer {
+  customerId: string;
+  customerName: string;
+  carrierName: string;
+  lastSaleDate: string;
+  eligibleDate: string;
+  ruleLabel: string;
+}
+
+export interface DashboardCarrierTrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface DashboardCarrierTrendSeries {
+  carrierName: string;
+  totalCount: number;
+  points: DashboardCarrierTrendPoint[];
+}
+
 export interface DashboardSummary {
   todaySalesCount: number;
   todayCanceledSalesCount: number;
@@ -71,6 +119,7 @@ export interface DashboardSummary {
   currentReceivableBalance: number;
   currentReceivableCount: number;
   partialReceivableCount: number;
+  activationEligibleCount: number;
   periodSalesCount: number;
   periodSalesAmount: number;
   periodInitialReceivedAmount: number;
@@ -86,18 +135,24 @@ export interface DashboardReportData {
   filters: DashboardFilters;
   periodLabel: string;
   generatedAt: string;
+  availableStores: DashboardStoreOption[];
   metrics: DashboardMetric[];
   summary: DashboardSummary;
   attentionItems: DashboardAttentionItem[];
+  receivableSnapshots: DashboardReceivableSnapshot[];
+  storeSummaries: DashboardStoreSummary[];
   staffSummaries: DashboardStaffSummary[];
   dailySummaries: DashboardDailySummary[];
   recentSales: DashboardRecentSale[];
+  activationEligibleCustomers: DashboardActivationEligibleCustomer[];
+  carrierTrendSeries: DashboardCarrierTrendSeries[];
 }
 
 type DashboardRawSearchParams = {
   preset?: string | string[];
   dateFrom?: string | string[];
   dateTo?: string | string[];
+  storeId?: string | string[];
 };
 
 function readFirst(value: string | string[] | undefined) {
@@ -198,6 +253,7 @@ export function resolveDashboardFilters(
   const presetValue = readFirst(rawSearchParams.preset);
   const dateFromValue = readFirst(rawSearchParams.dateFrom);
   const dateToValue = readFirst(rawSearchParams.dateTo);
+  const storeIdValue = readFirst(rawSearchParams.storeId);
 
   if (isDateInput(dateFromValue) || isDateInput(dateToValue)) {
     const fallbackRange = resolvePresetRange("7d", referenceDate);
@@ -216,6 +272,7 @@ export function resolveDashboardFilters(
       preset: "custom",
       dateFrom,
       dateTo,
+      storeId: storeIdValue,
     };
   }
 
@@ -227,6 +284,7 @@ export function resolveDashboardFilters(
   return {
     preset,
     ...resolvePresetRange(preset, referenceDate),
+    storeId: storeIdValue,
   };
 }
 
@@ -235,6 +293,9 @@ export function buildDashboardQueryString(filters: DashboardFilters) {
   searchParams.set("preset", filters.preset);
   searchParams.set("dateFrom", filters.dateFrom);
   searchParams.set("dateTo", filters.dateTo);
+  if (filters.storeId) {
+    searchParams.set("storeId", filters.storeId);
+  }
   return searchParams.toString();
 }
 
@@ -293,11 +354,7 @@ function buildAttentionItems(input: {
     customerName: string;
     balanceAmount: number;
   }>;
-  inventorySnapshot: {
-    inStockCount: number;
-    reservedCount: number;
-    sampleItems: string[];
-  };
+  activationEligibleCustomers: DashboardActivationEligibleCustomer[];
 }): DashboardAttentionItem[] {
   const items: DashboardAttentionItem[] = [];
 
@@ -344,21 +401,27 @@ function buildAttentionItems(input: {
     });
   }
 
-  items.push({
-    title: `판매 대기 재고 ${input.inventorySnapshot.inStockCount}대 / 예약 ${input.inventorySnapshot.reservedCount}대`,
-    detail:
-      input.inventorySnapshot.sampleItems.join(" / ") ||
-      "현재 노출 중인 판매 대기 재고가 없습니다.",
-    badge:
-      input.inventorySnapshot.reservedCount > 0
-        ? "재고 확인"
-        : "재고 안정",
-    tone:
-      input.inventorySnapshot.inStockCount > 0 ||
-      input.inventorySnapshot.reservedCount > 0
-        ? "slate"
-        : "teal",
-  });
+  if (input.activationEligibleCustomers.length > 0) {
+    items.push({
+      title: `개통 가능 고객 ${input.activationEligibleCustomers.length}건`,
+      detail: input.activationEligibleCustomers
+        .slice(0, 3)
+        .map(
+          (record) =>
+            `${record.customerName} / ${record.carrierName} / 가능일 ${record.eligibleDate}`,
+        )
+        .join(" / "),
+      badge: "후속 확인",
+      tone: "amber",
+    });
+  } else {
+    items.push({
+      title: "개통 가능 고객 없음",
+      detail: "현재 규칙 기준으로 즉시 개통 가능한 고객이 없습니다.",
+      badge: "안정",
+      tone: "teal",
+    });
+  }
 
   return items;
 }
@@ -367,13 +430,16 @@ export async function getDashboardReportData(
   rawSearchParams: DashboardRawSearchParams,
 ): Promise<DashboardReportData> {
   const filters = resolveDashboardFilters(rawSearchParams);
+  const selectedStoreId = filters.storeId || undefined;
   const periodStart = parseKstDateInput(filters.dateFrom, "start");
   const periodEnd = parseKstDateInput(filters.dateTo, "end");
+  const referenceDate = new Date();
   const todayFilters = resolveDashboardFilters({ preset: "today" });
   const todayStart = parseKstDateInput(todayFilters.dateFrom, "start");
   const todayEnd = parseKstDateInput(todayFilters.dateTo, "end");
 
   const [
+    activeStores,
     periodSales,
     periodPayments,
     todayCompletedSales,
@@ -384,12 +450,24 @@ export async function getDashboardReportData(
     partialReceivableCount,
     topReceivables,
     partialReceivables,
-    inventoryCounts,
-    inventorySamples,
+    activationRules,
+    activationCustomers,
+    activationSales,
   ] = await Promise.all([
+    prisma.store.findMany({
+      where: {
+        isActive: true,
+      },
+      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
     prisma.sale.findMany({
       where: {
         status: "COMPLETED",
+        ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
         saleDate: {
           gte: periodStart,
           lte: periodEnd,
@@ -420,6 +498,12 @@ export async function getDashboardReportData(
             name: true,
           },
         },
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         staff: {
           select: {
             id: true,
@@ -437,6 +521,7 @@ export async function getDashboardReportData(
     prisma.payment.findMany({
       where: {
         status: "COMPLETED",
+        ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
         paymentDate: {
           gte: periodStart,
           lte: periodEnd,
@@ -445,6 +530,12 @@ export async function getDashboardReportData(
       select: {
         amount: true,
         paymentDate: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         staff: {
           select: {
             id: true,
@@ -456,6 +547,7 @@ export async function getDashboardReportData(
     prisma.sale.findMany({
       where: {
         status: "COMPLETED",
+        ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
         saleDate: {
           gte: todayStart,
           lte: todayEnd,
@@ -468,6 +560,7 @@ export async function getDashboardReportData(
     prisma.payment.findMany({
       where: {
         status: "COMPLETED",
+        ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
         paymentDate: {
           gte: todayStart,
           lte: todayEnd,
@@ -480,6 +573,7 @@ export async function getDashboardReportData(
     prisma.sale.count({
       where: {
         status: "CANCELED",
+        ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
         saleDate: {
           gte: todayStart,
           lte: todayEnd,
@@ -491,6 +585,13 @@ export async function getDashboardReportData(
         balanceAmount: true,
       },
       where: {
+        ...(selectedStoreId
+          ? {
+              sale: {
+                storeId: selectedStoreId,
+              },
+            }
+          : {}),
         balanceAmount: {
           gt: 0,
         },
@@ -498,6 +599,13 @@ export async function getDashboardReportData(
     }),
     prisma.receivable.count({
       where: {
+        ...(selectedStoreId
+          ? {
+              sale: {
+                storeId: selectedStoreId,
+              },
+            }
+          : {}),
         balanceAmount: {
           gt: 0,
         },
@@ -505,16 +613,30 @@ export async function getDashboardReportData(
     }),
     prisma.receivable.count({
       where: {
+        ...(selectedStoreId
+          ? {
+              sale: {
+                storeId: selectedStoreId,
+              },
+            }
+          : {}),
         status: "PARTIALLY_PAID",
       },
     }),
     prisma.receivable.findMany({
       where: {
+        ...(selectedStoreId
+          ? {
+              sale: {
+                storeId: selectedStoreId,
+              },
+            }
+          : {}),
         balanceAmount: {
           gt: 0,
         },
       },
-      take: 3,
+      take: 10,
       orderBy: [{ balanceAmount: "desc" }, { createdAt: "desc" }],
       select: {
         balanceAmount: true,
@@ -541,6 +663,13 @@ export async function getDashboardReportData(
     }),
     prisma.receivable.findMany({
       where: {
+        ...(selectedStoreId
+          ? {
+              sale: {
+                storeId: selectedStoreId,
+              },
+            }
+          : {}),
         status: "PARTIALLY_PAID",
       },
       take: 3,
@@ -554,40 +683,51 @@ export async function getDashboardReportData(
         },
       },
     }),
-    prisma.inventoryItem.groupBy({
-      by: ["status"],
+    prisma.carrierActivationRule.findMany({
       where: {
-        isHidden: false,
-        status: {
-          in: ["IN_STOCK", "RESERVED"],
+        isActive: true,
+      },
+      orderBy: {
+        carrier: {
+          name: "asc",
         },
       },
-      _count: {
-        _all: true,
-      },
-    }),
-    prisma.inventoryItem.findMany({
-      where: {
-        isHidden: false,
-        status: {
-          in: ["IN_STOCK", "RESERVED"],
-        },
-      },
-      take: 3,
-      orderBy: [{ receivedAt: "asc" }, { createdAt: "asc" }],
-      select: {
-        status: true,
+      include: {
         carrier: {
           select: {
             name: true,
           },
         },
-        deviceModel: {
+      },
+    }),
+    prisma.customer.findMany({
+      where: {
+        isHidden: false,
+        currentCarrierId: {
+          not: null,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        currentCarrierId: true,
+        currentCarrier: {
           select: {
             name: true,
           },
         },
-        capacity: true,
+      },
+    }),
+    prisma.sale.findMany({
+      where: {
+        status: "COMPLETED",
+        ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
+      },
+      orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
+      select: {
+        customerId: true,
+        carrierId: true,
+        saleDate: true,
       },
     }),
   ]);
@@ -600,6 +740,70 @@ export async function getDashboardReportData(
     todayCompletedPayments,
     (payment) => payment.amount,
   );
+  const activationRuleMap = new Map(
+    activationRules.map((rule) => [rule.carrierId, rule]),
+  );
+  const latestActivationSaleMap = new Map<
+    string,
+    {
+      carrierId: string;
+      saleDate: Date;
+    }
+  >();
+
+  for (const sale of activationSales) {
+    const key = `${sale.customerId}:${sale.carrierId}`;
+
+    if (!latestActivationSaleMap.has(key)) {
+      latestActivationSaleMap.set(key, sale);
+    }
+  }
+
+  const activationEligibleCustomers: DashboardActivationEligibleCustomer[] =
+    activationCustomers
+      .map((customer) => {
+        const carrierId = customer.currentCarrierId;
+
+        if (!carrierId || !customer.currentCarrier) {
+          return null;
+        }
+
+        const rule = activationRuleMap.get(carrierId);
+        const latestSale = latestActivationSaleMap.get(`${customer.id}:${carrierId}`);
+
+        if (!rule || !latestSale) {
+          return null;
+        }
+
+        const ruleConfig = {
+          countUnit: rule.countUnit,
+          countValue: rule.countValue,
+          monthCountMode: rule.monthCountMode,
+        };
+
+        if (!isActivationEligible(referenceDate, latestSale.saleDate, ruleConfig)) {
+          return null;
+        }
+
+        return {
+          customerId: customer.id,
+          customerName: customer.name,
+          carrierName: customer.currentCarrier.name,
+          lastSaleDate: formatKstDate(latestSale.saleDate),
+          eligibleDate: formatKstDate(
+            getActivationEligibleDate(latestSale.saleDate, ruleConfig),
+          ),
+          ruleLabel: formatActivationRuleLabel(ruleConfig),
+        };
+      })
+      .filter((customer): customer is DashboardActivationEligibleCustomer => customer !== null)
+      .sort((left, right) => {
+        if (left.eligibleDate !== right.eligibleDate) {
+          return left.eligibleDate.localeCompare(right.eligibleDate, "ko-KR");
+        }
+
+        return left.customerName.localeCompare(right.customerName, "ko-KR");
+      });
 
   const summary: DashboardSummary = {
     todaySalesCount: todayCompletedSales.length,
@@ -611,6 +815,7 @@ export async function getDashboardReportData(
     currentReceivableBalance: receivableAggregate._sum.balanceAmount ?? 0,
     currentReceivableCount,
     partialReceivableCount,
+    activationEligibleCount: activationEligibleCustomers.length,
     periodSalesCount: periodSales.length,
     periodSalesAmount: sumBy(periodSales, (sale) => sale.finalSalePrice),
     periodInitialReceivedAmount: sumBy(
@@ -636,7 +841,29 @@ export async function getDashboardReportData(
     periodProfitAmount: sumBy(periodSales, (sale) => sale.totalProfitAmount),
   };
 
+  const storeMap = new Map<string, DashboardStoreSummary>();
   const staffMap = new Map<string, DashboardStaffSummary>();
+
+  for (const sale of periodSales) {
+    const storeId = sale.store?.id ?? "unassigned";
+    const storeName = sale.store?.name ?? "미지정 매장";
+    const existing = storeMap.get(storeId) ?? {
+      storeId,
+      storeName,
+      salesCount: 0,
+      salesAmount: 0,
+      collectedAmount: 0,
+      additionalPaymentAmount: 0,
+      profitAmount: 0,
+    };
+
+    existing.salesCount += 1;
+    existing.salesAmount += sale.finalSalePrice;
+    existing.collectedAmount += sale.actualReceivedAmount;
+    existing.profitAmount += sale.totalProfitAmount;
+
+    storeMap.set(storeId, existing);
+  }
 
   for (const sale of periodSales) {
     const existing = staffMap.get(sale.staff.id) ?? {
@@ -658,6 +885,23 @@ export async function getDashboardReportData(
   }
 
   for (const payment of periodPayments) {
+    const paymentStoreId = payment.store?.id ?? "unassigned";
+    const paymentStoreName = payment.store?.name ?? "미지정 매장";
+    const storeSummary = storeMap.get(paymentStoreId) ?? {
+      storeId: paymentStoreId,
+      storeName: paymentStoreName,
+      salesCount: 0,
+      salesAmount: 0,
+      collectedAmount: 0,
+      additionalPaymentAmount: 0,
+      profitAmount: 0,
+    };
+
+    storeSummary.additionalPaymentAmount += payment.amount;
+    storeSummary.collectedAmount += payment.amount;
+
+    storeMap.set(paymentStoreId, storeSummary);
+
     const existing = staffMap.get(payment.staff.id) ?? {
       staffId: payment.staff.id,
       staffName: payment.staff.displayName,
@@ -715,23 +959,45 @@ export async function getDashboardReportData(
     current.collectedAmount += payment.amount;
   }
 
-  const inventorySummary = {
-    inStockCount:
-      inventoryCounts.find((group) => group.status === "IN_STOCK")?._count._all ??
-      0,
-    reservedCount:
-      inventoryCounts.find((group) => group.status === "RESERVED")?._count._all ??
-      0,
-    sampleItems: inventorySamples.map(
-      (item) =>
-        `${item.status === "RESERVED" ? "예약" : "판매 대기"} / ${item.carrier.name} ${item.deviceModel.name} ${item.capacity}`,
-    ),
-  };
+  const carrierDailyCountMap = new Map<string, Map<string, number>>();
+  const carrierTotalCountMap = new Map<string, number>();
+
+  for (const sale of periodSales) {
+    const carrierName = sale.carrier.name;
+    const dateKey = formatKstDate(sale.saleDate);
+    const dailyMap = carrierDailyCountMap.get(carrierName) ?? new Map<string, number>();
+
+    dailyMap.set(dateKey, (dailyMap.get(dateKey) ?? 0) + 1);
+    carrierDailyCountMap.set(carrierName, dailyMap);
+    carrierTotalCountMap.set(
+      carrierName,
+      (carrierTotalCountMap.get(carrierName) ?? 0) + 1,
+    );
+  }
+
+  const carrierTrendSeries: DashboardCarrierTrendSeries[] = [...carrierTotalCountMap.entries()]
+    .sort((left, right) => {
+      if (right[1] !== left[1]) {
+        return right[1] - left[1];
+      }
+
+      return left[0].localeCompare(right[0], "ko-KR");
+    })
+    .slice(0, 3)
+    .map(([carrierName, totalCount]) => ({
+      carrierName,
+      totalCount,
+      points: listDateInputs(filters.dateFrom, filters.dateTo).map((date) => ({
+        date,
+        count: carrierDailyCountMap.get(carrierName)?.get(date) ?? 0,
+      })),
+    }));
 
   return {
     filters,
     periodLabel: formatKstDateRange(periodStart, periodEnd),
     generatedAt: formatKstDate(new Date()),
+    availableStores: activeStores,
     metrics: buildDashboardMetrics(summary),
     summary,
     attentionItems: buildAttentionItems({
@@ -748,7 +1014,24 @@ export async function getDashboardReportData(
         customerName: record.customer.name,
         balanceAmount: record.balanceAmount,
       })),
-      inventorySnapshot: inventorySummary,
+      activationEligibleCustomers,
+    }),
+    receivableSnapshots: topReceivables.map((record) => ({
+      customerName: record.customer.name,
+      carrierName: record.sale.carrier.name,
+      deviceModelName: record.sale.deviceModel.name,
+      balanceAmount: record.balanceAmount,
+    })),
+    storeSummaries: [...storeMap.values()].sort((left, right) => {
+      if (right.salesAmount !== left.salesAmount) {
+        return right.salesAmount - left.salesAmount;
+      }
+
+      if (right.profitAmount !== left.profitAmount) {
+        return right.profitAmount - left.profitAmount;
+      }
+
+      return left.storeName.localeCompare(right.storeName, "ko-KR");
     }),
     staffSummaries: [...staffMap.values()].sort((left, right) => {
       if (right.profitAmount !== left.profitAmount) {
@@ -762,7 +1045,7 @@ export async function getDashboardReportData(
       return right.collectedAmount - left.collectedAmount;
     }),
     dailySummaries: [...dailySummaryMap.values()],
-    recentSales: periodSales.slice(0, 8).map((sale) => ({
+    recentSales: periodSales.slice(0, 10).map((sale) => ({
       id: sale.id,
       saleDate: formatKstDate(sale.saleDate),
       customerName: sale.customer.name,
@@ -774,6 +1057,8 @@ export async function getDashboardReportData(
       receivableStatus: sale.receivable?.status ?? null,
       profitAmount: sale.totalProfitAmount,
     })),
+    activationEligibleCustomers,
+    carrierTrendSeries,
   };
 }
 
@@ -798,6 +1083,7 @@ function buildCsvRows(report: DashboardReportData) {
     ["오늘 판매 건수", report.summary.todaySalesCount],
     ["오늘 수납 금액", report.summary.todayCollectedAmount],
     ["현재 미수금 잔액", report.summary.currentReceivableBalance],
+    ["개통 가능 고객", report.summary.activationEligibleCount],
     ["선택 기간 판매 건수", report.summary.periodSalesCount],
     ["선택 기간 판매 금액", report.summary.periodSalesAmount],
     ["선택 기간 수납 금액", report.summary.periodCollectedAmount],
@@ -816,7 +1102,7 @@ function buildCsvRows(report: DashboardReportData) {
       row.profitAmount,
     ]),
     [],
-    ["판매일", "고객", "통신사", "단말기", "담당자", "수납 금액", "미수 금액", "총이익"],
+    ["판매일", "고객", "통신사", "기종", "담당자", "수납 금액", "미수 금액", "총이익"],
     ...report.recentSales.map((row) => [
       row.saleDate,
       row.customerName,

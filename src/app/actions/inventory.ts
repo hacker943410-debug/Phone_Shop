@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requireCurrentUser } from "@/lib/auth/dal";
 import { parseKstDateInput } from "@/lib/date-utils";
+import { normalizeImei } from "@/lib/phone-utils";
 import { prisma } from "@/lib/prisma";
 import {
   InventoryStatus,
@@ -59,10 +60,6 @@ function readRequiredDate(formData: FormData, key: string) {
   return value ? parseKstDateInput(value, "start") : null;
 }
 
-function normalizeImei(value: string) {
-  return value.replace(/\D/g, "");
-}
-
 function resolveDispatchedAt(
   status: InventoryStatusValue,
   currentDispatchedAt: Date | null,
@@ -75,6 +72,24 @@ function resolveDispatchedAt(
     default:
       return null;
   }
+}
+
+async function resolveStoreId(inputStoreId: string | null) {
+  if (inputStoreId) {
+    return inputStoreId;
+  }
+
+  const defaultStore = await prisma.store.findFirst({
+    where: {
+      isActive: true,
+    },
+    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+    select: {
+      id: true,
+    },
+  });
+
+  return defaultStore?.id ?? null;
 }
 
 function revalidateInventoryViews() {
@@ -102,6 +117,7 @@ export async function upsertInventoryItemAction(formData: FormData) {
   await requireCurrentUser();
 
   const id = readOptionalText(formData, "id");
+  const rawStoreId = readOptionalText(formData, "storeId");
   const carrierId = readText(formData, "carrierId");
   const deviceModelId = readText(formData, "deviceModelId");
   const color = readText(formData, "color");
@@ -112,8 +128,10 @@ export async function upsertInventoryItemAction(formData: FormData) {
   const receivedAt = readRequiredDate(formData, "receivedAt");
   const assigneeId = readOptionalText(formData, "assigneeId");
   const notes = readOptionalText(formData, "notes");
+  const storeId = await resolveStoreId(rawStoreId);
 
   if (
+    !storeId ||
     !carrierId ||
     !deviceModelId ||
     !color ||
@@ -148,6 +166,7 @@ export async function upsertInventoryItemAction(formData: FormData) {
       },
       data: {
         carrierId,
+        storeId,
         deviceModelId,
         color,
         capacity,
@@ -164,6 +183,7 @@ export async function upsertInventoryItemAction(formData: FormData) {
     await prisma.inventoryItem.create({
       data: {
         carrierId,
+        storeId,
         deviceModelId,
         color,
         capacity,

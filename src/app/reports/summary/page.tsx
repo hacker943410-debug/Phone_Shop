@@ -2,9 +2,17 @@ import type { Metadata } from "next";
 
 import { ReportPrintButton } from "@/components/dashboard/report-print-button";
 import { EmptyState } from "@/components/workspace/admin-form-controls";
-import { ActionChip, Panel, TonePill } from "@/components/workspace/workspace-primitives";
+import { secondaryButtonClassName } from "@/components/workspace/ui-classnames";
+import {
+  ActionChip,
+  Panel,
+  TonePill,
+} from "@/components/workspace/workspace-primitives";
 import { requireCurrentUser } from "@/lib/auth/dal";
-import { getDashboardReportData } from "@/lib/dashboard-reporting";
+import {
+  buildDashboardQueryString,
+  getDashboardReportData,
+} from "@/lib/dashboard-reporting";
 import { formatWon } from "@/lib/formatters";
 
 export const metadata: Metadata = {
@@ -27,7 +35,7 @@ function getReceivableLabel(status: "UNPAID" | "PARTIALLY_PAID" | "PAID") {
     case "UNPAID":
       return "미납";
     case "PARTIALLY_PAID":
-      return "부분 수납";
+      return "부분수납";
     case "PAID":
       return "완납";
   }
@@ -40,19 +48,23 @@ export default async function SummaryReportPage({
     preset?: string | string[];
     dateFrom?: string | string[];
     dateTo?: string | string[];
+    storeId?: string | string[];
   }>;
 }) {
   const currentUser = await requireCurrentUser();
   const report = await getDashboardReportData(await searchParams);
-  const reportQuery = `preset=${report.filters.preset}&dateFrom=${report.filters.dateFrom}&dateTo=${report.filters.dateTo}`;
+  const visibleDailySummaries = report.dailySummaries.filter(
+    (row) => row.salesCount > 0,
+  );
+  const reportQuery = buildDashboardQueryString(report.filters);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,rgba(251,245,233,0.96)_0%,rgba(245,238,228,1)_100%)] px-4 py-6 print:bg-white print:px-0 print:py-0">
-      <div className="mx-auto max-w-6xl space-y-6 rounded-[2rem] border border-white/60 bg-white/90 p-6 shadow-[0_28px_90px_-50px_rgba(15,23,42,0.35)] print:rounded-none print:border-none print:p-0 print:shadow-none sm:p-8">
+    <main className="min-h-screen bg-[linear-gradient(180deg,rgba(248,244,236,0.96)_0%,rgba(241,237,229,1)_100%)] px-4 py-6 print:bg-white print:px-0 print:py-0">
+      <div className="mx-auto max-w-6xl space-y-6 rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-[0_28px_90px_-50px_rgba(15,23,42,0.28)] print:rounded-none print:border-none print:p-0 print:shadow-none sm:p-8">
         <header className="space-y-4 border-b border-slate-200 pb-6 print:pb-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
-              <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-amber-700">
+              <p className="text-[0.7rem] font-semibold uppercase tracking-[0.35em] text-blue-700">
                 Summary Report
               </p>
               <div className="space-y-2">
@@ -60,7 +72,8 @@ export default async function SummaryReportPage({
                   PhoneShop 기간 운영 보고서
                 </h1>
                 <p className="text-sm leading-7 text-slate-600">
-                  {report.periodLabel} 기준 판매, 수납, 미수금 현황을 한 번에 인쇄할 수 있는 요약 보고서입니다.
+                  {report.periodLabel} 기준으로 판매, 수납, 미수금, 리베이트,
+                  정책 수익 흐름을 인쇄와 보관에 적합한 형태로 정리했습니다.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -72,13 +85,13 @@ export default async function SummaryReportPage({
 
             <div className="flex flex-wrap gap-2 print:hidden">
               <a
-                className="inline-flex rounded-full border border-slate-950/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-amber-400 hover:bg-amber-50"
+                className={`${secondaryButtonClassName} h-10 px-4`}
                 href={`/?${reportQuery}`}
               >
                 대시보드로 돌아가기
               </a>
               <a
-                className="inline-flex rounded-full border border-slate-950/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-amber-400 hover:bg-amber-50"
+                className={`${secondaryButtonClassName} h-10 px-4`}
                 href={`/api/reports/summary?${reportQuery}`}
               >
                 CSV 다운로드
@@ -89,7 +102,7 @@ export default async function SummaryReportPage({
         </header>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <article className="rounded-[1.5rem] border border-slate-950/8 bg-stone-50/80 p-4">
+          <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
               판매 건수
             </p>
@@ -100,7 +113,7 @@ export default async function SummaryReportPage({
               판매 금액 {formatWon(report.summary.periodSalesAmount)}
             </p>
           </article>
-          <article className="rounded-[1.5rem] border border-slate-950/8 bg-stone-50/80 p-4">
+          <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
               수납 금액
             </p>
@@ -108,11 +121,11 @@ export default async function SummaryReportPage({
               {formatWon(report.summary.periodCollectedAmount)}
             </p>
             <p className="mt-2 text-sm text-slate-600">
-              즉시 수납 {formatWon(report.summary.periodInitialReceivedAmount)} / 추가 수납{" "}
-              {formatWon(report.summary.periodAdditionalPaymentAmount)}
+              즉시 수납 {formatWon(report.summary.periodInitialReceivedAmount)} / 추가
+              수납 {formatWon(report.summary.periodAdditionalPaymentAmount)}
             </p>
           </article>
-          <article className="rounded-[1.5rem] border border-slate-950/8 bg-stone-50/80 p-4">
+          <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
               리베이트 / 정책 수익
             </p>
@@ -127,7 +140,7 @@ export default async function SummaryReportPage({
               {formatWon(report.summary.periodPolicyRevenueAmount)}
             </p>
           </article>
-          <article className="rounded-[1.5rem] border border-slate-950/8 bg-stone-50/80 p-4">
+          <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
               총이익 / 현재 미수
             </p>
@@ -142,11 +155,11 @@ export default async function SummaryReportPage({
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <Panel
-            title="날짜별 요약"
-            description="선택 기간 동안 일자별 판매와 수납 흐름을 표로 정리했습니다."
+            title="일자별 요약"
+            description="선택 기간 동안 날짜별 판매와 수납 흐름을 인쇄 기준으로 정리했습니다."
           >
-            {report.dailySummaries.length === 0 ? (
-              <EmptyState message="선택 기간에 표시할 날짜별 실적이 없습니다." />
+            {visibleDailySummaries.length === 0 ? (
+              <EmptyState message="선택 기간에 표시할 일자별 집계가 없습니다." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -159,7 +172,7 @@ export default async function SummaryReportPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200/80">
-                    {report.dailySummaries.map((row) => (
+                    {visibleDailySummaries.map((row) => (
                       <tr key={row.date}>
                         <td className="py-4 pr-4 align-top">
                           <p className="font-semibold text-slate-950">{row.date}</p>
@@ -187,13 +200,13 @@ export default async function SummaryReportPage({
 
           <Panel
             title="운영 체크"
-            description="보고 시점에 같이 확인해야 할 운영 포인트입니다."
+            description="보고서 기준 시점에서 함께 확인해야 하는 운영 항목입니다."
           >
             <ul className="space-y-3">
               {report.attentionItems.map((item) => (
                 <li
                   key={item.title}
-                  className="rounded-[1.35rem] border border-slate-950/8 bg-stone-50/85 p-4"
+                  className="rounded-lg border border-stone-200 bg-stone-50 p-4"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
@@ -210,10 +223,10 @@ export default async function SummaryReportPage({
 
         <Panel
           title="최근 판매 상세"
-          description="선택 기간의 최신 판매와 미수 상태를 같이 출력합니다."
+          description="선택 기간에 포함된 최근 판매와 미수 상태를 같이 출력합니다."
         >
           {report.recentSales.length === 0 ? (
-            <EmptyState message="선택 기간에 등록된 판매가 없습니다." />
+            <EmptyState message="선택 기간에 등록된 최근 판매가 없습니다." />
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">

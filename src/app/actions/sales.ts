@@ -143,6 +143,20 @@ function getReceivableStatus(actualReceivedAmount: number, receivableAmount: num
     : ReceivableStatus.UNPAID;
 }
 
+async function resolveDefaultStoreId() {
+  const defaultStore = await prisma.store.findFirst({
+    where: {
+      isActive: true,
+    },
+    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+    select: {
+      id: true,
+    },
+  });
+
+  return defaultStore?.id ?? null;
+}
+
 export async function createSaleAction(formData: FormData) {
   const currentUser = await requireCurrentUser();
 
@@ -151,6 +165,8 @@ export async function createSaleAction(formData: FormData) {
   const saleDate = readRequiredDate(formData, "saleDate");
   const ratePlanId = readOptionalText(formData, "ratePlanId");
   const listPrice = readOptionalInt(formData, "listPrice");
+  const subsidyAmountText = readText(formData, "subsidyAmount");
+  const subsidyAmountInput = readOptionalInt(formData, "subsidyAmount");
   const discountApplied = readBoolean(formData, "discountApplied");
   const manualDiscountMethod = readDiscountMethod(formData, "discountMethod");
   const manualDiscountValue = readOptionalInt(formData, "discountValue");
@@ -161,12 +177,14 @@ export async function createSaleAction(formData: FormData) {
   const cardInstallmentMonths = readOptionalInt(formData, "cardInstallmentMonths");
   const notes = readOptionalText(formData, "notes");
   const selectedAddOnServiceIds = readAddOnServiceIds(formData);
+  const subsidyAmount = subsidyAmountInput ?? 0;
 
   if (
     !customerId ||
     !inventoryItemId ||
     !saleDate ||
     listPrice === null ||
+    (subsidyAmountInput === null && subsidyAmountText !== "") ||
     listPrice <= 0 ||
     cashAmount === null ||
     cardAmount === null ||
@@ -178,6 +196,7 @@ export async function createSaleAction(formData: FormData) {
   validateDiscountSelection(listPrice, manualDiscountMethod, manualDiscountValue);
 
   const [
+    defaultStoreId,
     customer,
     inventoryItem,
     availableRatePlans,
@@ -186,6 +205,7 @@ export async function createSaleAction(formData: FormData) {
     saleProfitPolicies,
     discountPolicies,
   ] = await Promise.all([
+      resolveDefaultStoreId(),
       prisma.customer.findFirst({
         where: {
           id: customerId,
@@ -212,6 +232,7 @@ export async function createSaleAction(formData: FormData) {
           carrierId: true,
           deviceModelId: true,
           costAmount: true,
+          storeId: true,
         },
       }),
       prisma.ratePlan.findMany({
@@ -351,6 +372,7 @@ export async function createSaleAction(formData: FormData) {
 
   const salesBaseAmounts = calculateSalesAmounts({
     listPrice,
+    subsidyAmount,
     discountApplied,
     discountMethod: effectiveDiscountMethod,
     discountValue: effectiveDiscountValue,
@@ -369,8 +391,13 @@ export async function createSaleAction(formData: FormData) {
       )
     : 0;
 
+  if (subsidyAmount > salesBaseAmounts.discountedPrice) {
+    redirectSalesNotice("invalid-sale-form");
+  }
+
   const calculationResult = calculateSalesAmounts({
     listPrice,
+    subsidyAmount,
     discountApplied,
     discountMethod: effectiveDiscountMethod,
     discountValue: effectiveDiscountValue,
@@ -417,6 +444,7 @@ export async function createSaleAction(formData: FormData) {
         data: {
           saleDate,
           status: SaleStatus.COMPLETED,
+          storeId: inventoryItem.storeId ?? defaultStoreId,
           customerId: customer.id,
           staffId: currentUser.id,
           carrierId: inventoryItem.carrierId,
@@ -431,7 +459,7 @@ export async function createSaleAction(formData: FormData) {
           discountSuggestionValue: matchedDiscountPolicy?.discountValue ?? null,
           discountAmount: calculationResult.discountAmount,
           discountedPrice: calculationResult.discountedPrice,
-          subsidyAmount: 0,
+          subsidyAmount,
           finalSalePrice: calculationResult.finalSalePrice,
           cashAmount,
           cardAmount,

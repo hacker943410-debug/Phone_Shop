@@ -32,8 +32,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 dev-server*.log
+.tmp-phoneshop-dev.log
 __pycache__/
 *.pyc
+.playwright-mcp/
+dashboard-after.png
+dashboard-current.png
+sales-new-after.png
+sales-new-current.png
 
 # env files (can opt-in for committing if needed)
 .env*

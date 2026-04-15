@@ -41,6 +41,16 @@ enum RevenueCalculationMethod {
   PERCENTAGE
 }
 
+enum ActivationCountUnit {
+  DAY
+  MONTH
+}
+
+enum ActivationMonthCountMode {
+  INCLUDE_CURRENT_MONTH
+  EXCLUDE_CURRENT_MONTH
+}
+
 enum ReceivableStatus {
   UNPAID
   PARTIALLY_PAID
@@ -67,11 +77,28 @@ model User {
   isActive       Boolean         @default(true)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+  canceledPayments Payment[]     @relation("PaymentCanceledBy")
   inventoryItems InventoryItem[] @relation("InventoryAssignee")
   payments       Payment[]       @relation("PaymentStaff")
   sales          Sale[]          @relation("SalesStaff")
 
   @@index([role, isActive])
+}
+
+model Store {
+  id             String          @id @default(cuid())
+  code           String          @unique
+  name           String          @unique
+  region         String?
+  isActive       Boolean         @default(true)
+  isDefault      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  inventoryItems InventoryItem[]
+  payments       Payment[]
+  sales          Sale[]
+
+  @@index([isActive, isDefault])
 }
 
 model Carrier {
@@ -81,6 +108,7 @@ model Carrier {
   isActive           Boolean            @default(true)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
+  activationRule     CarrierActivationRule?
   customers          Customer[]         @relation("CustomerCurrentCarrier")
   discountPolicies   DiscountPolicy[]
   inventoryItems     InventoryItem[]
@@ -89,6 +117,21 @@ model Carrier {
   sales              Sale[]
   saleProfitPolicies SaleProfitPolicy[]
   services           AddOnService[]
+
+  @@index([isActive])
+}
+
+model CarrierActivationRule {
+  id              String                   @id @default(cuid())
+  carrierId       String                   @unique
+  countUnit       ActivationCountUnit
+  countValue      Int
+  monthCountMode  ActivationMonthCountMode?
+  memo            String?
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  carrier         Carrier                  @relation(fields: [carrierId], references: [id], onDelete: Restrict)
 
   @@index([isActive])
 }
@@ -142,6 +185,7 @@ model AddOnService {
 
 model InventoryItem {
   id            String          @id @default(cuid())
+  storeId       String?
   carrierId     String
   deviceModelId String
   color         String
@@ -160,7 +204,9 @@ model InventoryItem {
   carrier       Carrier         @relation(fields: [carrierId], references: [id], onDelete: Restrict)
   deviceModel   DeviceModel     @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
   sales         Sale[]
+  store         Store?          @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
+  @@index([storeId, status])
   @@index([carrierId, status])
   @@index([deviceModelId, status])
   @@index([receivedAt])
@@ -251,6 +297,7 @@ model Sale {
   id                          String            @id @default(cuid())
   saleDate                    DateTime
   status                      SaleStatus        @default(COMPLETED)
+  storeId                     String?
   customerId                  String
   staffId                     String
   carrierId                   String
@@ -302,7 +349,9 @@ model Sale {
   receivable                  Receivable?
   selectedServices            SaleAddOnService[]
   staff                       User              @relation("SalesStaff", fields: [staffId], references: [id], onDelete: Restrict)
+  store                       Store?            @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
+  @@index([storeId, saleDate])
   @@index([saleDate, status])
   @@index([customerId, saleDate])
   @@index([inventoryItemId, saleDate])
@@ -339,21 +388,29 @@ model Receivable {
 }
 
 model Payment {
-  id           String        @id @default(cuid())
-  receivableId String
-  saleId       String
-  staffId      String
-  paymentDate  DateTime
-  amount       Int
-  method       PaymentMethod
-  status       PaymentStatus @default(COMPLETED)
-  memo         String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  receivable   Receivable    @relation(fields: [receivableId], references: [id], onDelete: Restrict)
-  sale         Sale          @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  staff        User          @relation("PaymentStaff", fields: [staffId], references: [id], onDelete: Restrict)
+  id                 String        @id @default(cuid())
+  receivableId       String
+  saleId             String
+  storeId            String?
+  staffId            String
+  canceledById       String?
+  paymentDate        DateTime
+  amount             Int
+  method             PaymentMethod
+  status             PaymentStatus @default(COMPLETED)
+  memo               String?
+  canceledAt         DateTime?
+  cancellationReason String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  canceledBy         User?         @relation("PaymentCanceledBy", fields: [canceledById], references: [id], onDelete: SetNull)
+  receivable         Receivable    @relation(fields: [receivableId], references: [id], onDelete: Restrict)
+  sale               Sale          @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  staff              User          @relation("PaymentStaff", fields: [staffId], references: [id], onDelete: Restrict)
+  store              Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
   @@index([receivableId, paymentDate])
+  @@index([storeId, paymentDate])
   @@index([paymentDate, status])
+  @@index([canceledById])
 }

@@ -47,11 +47,22 @@ describe("auth utilities", () => {
     expect(canAccessPath("/settings/base", "ADMIN")).toBe(true);
     expect(canAccessPath("/settings/base", "STAFF")).toBe(false);
 
-    expect(
-      getNavigationItemsForRole("STAFF").some(
-        (item) => item.href === "/settings/base",
-      ),
-    ).toBe(false);
+    expect(getNavigationItemsForRole("STAFF").map((item) => item.href)).toEqual([
+      "/",
+      "/sales",
+      "/receivables",
+      "/customers",
+      "/inventory",
+    ]);
+    expect(getNavigationItemsForRole("ADMIN").map((item) => item.href)).toEqual([
+      "/",
+      "/sales",
+      "/receivables",
+      "/customers",
+      "/inventory",
+      "/settings/base",
+      "/settings/policies",
+    ]);
 
     expect(normalizeRedirectPath("https://example.com")).toBe("/");
     expect(resolvePostLoginPath("STAFF", "/settings/base")).toBe("/");

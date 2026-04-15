@@ -1,17 +1,22 @@
 import "dotenv/config";
+
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+
+import { hashPassword } from "../src/lib/auth/password";
 import { PrismaClient } from "./generated/client/client";
 import {
+  ActivationCountUnit,
+  ActivationMonthCountMode,
   DiscountMethod,
   DiscountTarget,
   InventoryStatus,
   PaymentMethod,
+  PaymentStatus,
   ReceivableStatus,
   RevenueCalculationMethod,
   SaleStatus,
   UserRole,
 } from "./generated/client/enums";
-import { hashPassword } from "../src/lib/auth/password";
 
 const adapter = new PrismaBetterSqlite3(
   { url: process.env.DATABASE_URL || "file:./prisma/dev.db" },
@@ -31,6 +36,8 @@ async function main() {
     prisma.receivable.deleteMany(),
     prisma.sale.deleteMany(),
     prisma.inventoryItem.deleteMany(),
+    prisma.store.deleteMany(),
+    prisma.carrierActivationRule.deleteMany(),
     prisma.discountPolicy.deleteMany(),
     prisma.saleProfitPolicy.deleteMany(),
     prisma.rebatePolicy.deleteMany(),
@@ -55,7 +62,7 @@ async function main() {
       {
         id: "user-kim-jh",
         username: "jihu_kim",
-        displayName: "김지훈",
+        displayName: "김지후",
         passwordHash: hashPassword("staff1234!"),
         role: UserRole.STAFF,
         isActive: true,
@@ -79,11 +86,70 @@ async function main() {
     ],
   });
 
+  await prisma.store.createMany({
+    data: [
+      {
+        id: "store-main",
+        code: "MAIN",
+        name: "본점",
+        region: "수원",
+        isActive: true,
+        isDefault: true,
+      },
+      {
+        id: "store-gangnam",
+        code: "GNM",
+        name: "강남점",
+        region: "서울 강남",
+        isActive: true,
+        isDefault: false,
+      },
+      {
+        id: "store-songpa",
+        code: "SGP",
+        name: "송파점",
+        region: "서울 송파",
+        isActive: true,
+        isDefault: false,
+      },
+    ],
+  });
+
   await prisma.carrier.createMany({
     data: [
       { id: "carrier-skt", code: "SKT", name: "SKT", isActive: true },
       { id: "carrier-kt", code: "KT", name: "KT", isActive: true },
       { id: "carrier-lgu", code: "LGU", name: "LG U+", isActive: true },
+    ],
+  });
+
+  await prisma.carrierActivationRule.createMany({
+    data: [
+      {
+        id: "activation-rule-skt",
+        carrierId: "carrier-skt",
+        countUnit: ActivationCountUnit.DAY,
+        countValue: 93,
+        memo: "SKT 기본 의무 유지 기간",
+        isActive: true,
+      },
+      {
+        id: "activation-rule-kt",
+        carrierId: "carrier-kt",
+        countUnit: ActivationCountUnit.DAY,
+        countValue: 127,
+        memo: "KT 개통 후 127일 기준",
+        isActive: true,
+      },
+      {
+        id: "activation-rule-lgu",
+        carrierId: "carrier-lgu",
+        countUnit: ActivationCountUnit.MONTH,
+        countValue: 4,
+        monthCountMode: ActivationMonthCountMode.INCLUDE_CURRENT_MONTH,
+        memo: "LG U+ 월 단위 기준 예시",
+        isActive: true,
+      },
     ],
   });
 
@@ -139,7 +205,7 @@ async function main() {
         carrierId: "carrier-lgu",
         name: "5G 프리미어 에센셜",
         monthlyFee: 95000,
-        description: "LG U+ 고빈도 판매 요금제",
+        description: "LG U+ 고가형 요금제",
         isActive: true,
       },
     ],
@@ -150,7 +216,7 @@ async function main() {
       {
         id: "service-kt-insurance",
         carrierId: "carrier-kt",
-        name: "KT 폰 안심보험",
+        name: "KT 휴대폰 보험",
         monthlyFee: 7900,
         description: "파손/분실 기본 보장",
         isActive: true,
@@ -184,7 +250,7 @@ async function main() {
         startsAt: at("2026-04-11T00:00:00+09:00"),
         endsAt: at("2026-04-11T23:59:59+09:00"),
         defaultRebateAmount: 310000,
-        memo: "하루 특가 리베이트",
+        memo: "주말 특가 리베이트",
         isActive: true,
       },
       {
@@ -227,13 +293,13 @@ async function main() {
       },
       {
         id: "profit-lgu-flip-202604",
-        name: "LG U+ 플립6 고정 수익 정책",
+        name: "LG U+ Flip 6 고정 수익 정책",
         carrierId: "carrier-lgu",
         startsAt: at("2026-04-01T00:00:00+09:00"),
         endsAt: at("2026-04-30T23:59:59+09:00"),
         calculationMethod: RevenueCalculationMethod.FIXED_AMOUNT,
         calculationValue: 120000,
-        memo: "플립6 집중 판매 기간",
+        memo: "Flip 6 집중 판매 기간",
         isActive: true,
       },
     ],
@@ -255,14 +321,14 @@ async function main() {
       },
       {
         id: "discount-carrier-skt-202604",
-        name: "SKT 통신사 할인율",
+        name: "SKT 통신사 할인",
         target: DiscountTarget.CARRIER,
         carrierId: "carrier-skt",
         startsAt: at("2026-04-01T00:00:00+09:00"),
         endsAt: at("2026-04-30T23:59:59+09:00"),
         discountMethod: DiscountMethod.PERCENTAGE,
         discountValue: 5,
-        memo: "기본 통신사 할인율",
+        memo: "기본 통신사 할인",
         isActive: true,
       },
       {
@@ -318,6 +384,20 @@ async function main() {
         normalizedPhone: "01099247781",
         currentCarrierId: "carrier-skt",
       },
+      {
+        id: "customer-yoon-seojin",
+        name: "윤서진",
+        phone: "010-3112-6708",
+        normalizedPhone: "01031126708",
+        currentCarrierId: "carrier-kt",
+      },
+      {
+        id: "customer-hwang-nari",
+        name: "황나리",
+        phone: "010-2874-1194",
+        normalizedPhone: "01028741194",
+        currentCarrierId: "carrier-lgu",
+      },
     ],
   });
 
@@ -325,6 +405,7 @@ async function main() {
     data: [
       {
         id: "inventory-s25-001",
+        storeId: "store-main",
         carrierId: "carrier-skt",
         deviceModelId: "device-galaxy-s25",
         color: "Titan Gray",
@@ -337,6 +418,7 @@ async function main() {
       },
       {
         id: "inventory-iphone16-001",
+        storeId: "store-gangnam",
         carrierId: "carrier-kt",
         deviceModelId: "device-iphone-16",
         color: "Blue",
@@ -350,6 +432,7 @@ async function main() {
       },
       {
         id: "inventory-iphone16-002",
+        storeId: "store-gangnam",
         carrierId: "carrier-kt",
         deviceModelId: "device-iphone-16",
         color: "Blue",
@@ -362,6 +445,7 @@ async function main() {
       },
       {
         id: "inventory-zflip6-001",
+        storeId: "store-songpa",
         carrierId: "carrier-lgu",
         deviceModelId: "device-z-flip-6",
         color: "Mint",
@@ -375,6 +459,7 @@ async function main() {
       },
       {
         id: "inventory-a56-001",
+        storeId: "store-main",
         carrierId: "carrier-skt",
         deviceModelId: "device-galaxy-a56",
         color: "Awesome Navy",
@@ -386,6 +471,48 @@ async function main() {
         dispatchedAt: at("2026-04-08T18:40:00+09:00"),
         assigneeId: "user-kim-jh",
       },
+      {
+        id: "inventory-s25-002",
+        storeId: "store-main",
+        carrierId: "carrier-skt",
+        deviceModelId: "device-galaxy-s25",
+        color: "Icy Blue",
+        capacity: "512GB",
+        imei: "357000001245872",
+        costAmount: 918000,
+        status: InventoryStatus.SOLD,
+        receivedAt: at("2025-11-26T10:10:00+09:00"),
+        dispatchedAt: at("2025-12-02T14:40:00+09:00"),
+        assigneeId: "user-kim-jh",
+      },
+      {
+        id: "inventory-iphone16-003",
+        storeId: "store-gangnam",
+        carrierId: "carrier-kt",
+        deviceModelId: "device-iphone-16",
+        color: "Black",
+        capacity: "256GB",
+        imei: "356100001245656",
+        costAmount: 1089000,
+        status: InventoryStatus.SOLD,
+        receivedAt: at("2025-11-22T09:45:00+09:00"),
+        dispatchedAt: at("2025-11-28T16:30:00+09:00"),
+        assigneeId: "user-park-sy",
+      },
+      {
+        id: "inventory-zflip6-002",
+        storeId: "store-songpa",
+        carrierId: "carrier-lgu",
+        deviceModelId: "device-z-flip-6",
+        color: "Silver Shadow",
+        capacity: "512GB",
+        imei: "358200001245339",
+        costAmount: 1180000,
+        status: InventoryStatus.SOLD,
+        receivedAt: at("2025-11-10T12:20:00+09:00"),
+        dispatchedAt: at("2025-11-18T17:00:00+09:00"),
+        assigneeId: "user-lee-dy",
+      },
     ],
   });
 
@@ -393,6 +520,7 @@ async function main() {
     data: [
       {
         id: "sale-20260411-kim",
+        storeId: "store-gangnam",
         saleDate: at("2026-04-11T13:20:00+09:00"),
         status: SaleStatus.COMPLETED,
         customerId: "customer-kim-seohyun",
@@ -432,6 +560,7 @@ async function main() {
       },
       {
         id: "sale-20260411-lee",
+        storeId: "store-main",
         saleDate: at("2026-04-11T15:10:00+09:00"),
         status: SaleStatus.COMPLETED,
         customerId: "customer-lee-jaemin",
@@ -465,10 +594,11 @@ async function main() {
         appliedSaleProfitPolicyId: "profit-skt-default-202604",
         appliedDiscountPolicyId: "discount-carrier-skt-202604",
         appliedSaleProfitPolicyName: "SKT 판매수익 기본 정책",
-        appliedDiscountPolicyName: "SKT 통신사 할인율",
+        appliedDiscountPolicyName: "SKT 통신사 할인",
       },
       {
         id: "sale-20260409-jung",
+        storeId: "store-songpa",
         saleDate: at("2026-04-09T16:15:00+09:00"),
         status: SaleStatus.COMPLETED,
         customerId: "customer-jung-haeun",
@@ -498,10 +628,11 @@ async function main() {
         appliedRebatePolicyId: "rebate-lgu-zflip6-20260401",
         appliedSaleProfitPolicyId: "profit-lgu-flip-202604",
         appliedRebatePolicyName: "LG U+ Z Flip 6 리베이트",
-        appliedSaleProfitPolicyName: "LG U+ 플립6 고정 수익 정책",
+        appliedSaleProfitPolicyName: "LG U+ Flip 6 고정 수익 정책",
       },
       {
         id: "sale-20260408-oh",
+        storeId: "store-main",
         saleDate: at("2026-04-08T18:40:00+09:00"),
         status: SaleStatus.COMPLETED,
         customerId: "customer-oh-sion",
@@ -535,6 +666,99 @@ async function main() {
         appliedSaleProfitPolicyId: "profit-skt-default-202604",
         appliedSaleProfitPolicyName: "SKT 판매수익 기본 정책",
       },
+      {
+        id: "sale-20251202-choi",
+        storeId: "store-main",
+        saleDate: at("2025-12-02T14:40:00+09:00"),
+        status: SaleStatus.COMPLETED,
+        customerId: "customer-choi-minwoo",
+        staffId: "user-kim-jh",
+        carrierId: "carrier-skt",
+        ratePlanId: "plan-skt-5gx",
+        inventoryItemId: "inventory-s25-002",
+        deviceModelId: "device-galaxy-s25",
+        listPrice: 1230000,
+        discountApplied: false,
+        discountAmount: 0,
+        discountedPrice: 1230000,
+        subsidyAmount: 0,
+        finalSalePrice: 1230000,
+        cashAmount: 430000,
+        cardAmount: 800000,
+        bankTransferAmount: 0,
+        cardInstallmentMonths: 10,
+        actualReceivedAmount: 1230000,
+        receivableAmount: 0,
+        deviceCostAmount: 918000,
+        rebateAmount: 0,
+        policyRevenueAmount: 61500,
+        profitCalculationBaseAmount: 1230000,
+        profitDeductionAmount: 0,
+        totalProfitAmount: 312000,
+        appliedSaleProfitPolicyName: "이전 판매 기준 데이터",
+      },
+      {
+        id: "sale-20251128-yoon",
+        storeId: "store-gangnam",
+        saleDate: at("2025-11-28T16:30:00+09:00"),
+        status: SaleStatus.COMPLETED,
+        customerId: "customer-yoon-seojin",
+        staffId: "user-park-sy",
+        carrierId: "carrier-kt",
+        ratePlanId: "plan-kt-choice",
+        inventoryItemId: "inventory-iphone16-003",
+        deviceModelId: "device-iphone-16",
+        listPrice: 1430000,
+        discountApplied: false,
+        discountAmount: 0,
+        discountedPrice: 1430000,
+        subsidyAmount: 0,
+        finalSalePrice: 1430000,
+        cashAmount: 580000,
+        cardAmount: 850000,
+        bankTransferAmount: 0,
+        cardInstallmentMonths: 12,
+        actualReceivedAmount: 1430000,
+        receivableAmount: 0,
+        deviceCostAmount: 1089000,
+        rebateAmount: 0,
+        policyRevenueAmount: 70000,
+        profitCalculationBaseAmount: 1430000,
+        profitDeductionAmount: 0,
+        totalProfitAmount: 411000,
+        appliedSaleProfitPolicyName: "이전 판매 기준 데이터",
+      },
+      {
+        id: "sale-20251118-hwang",
+        storeId: "store-songpa",
+        saleDate: at("2025-11-18T17:00:00+09:00"),
+        status: SaleStatus.COMPLETED,
+        customerId: "customer-hwang-nari",
+        staffId: "user-lee-dy",
+        carrierId: "carrier-lgu",
+        ratePlanId: "plan-lgu-premier",
+        inventoryItemId: "inventory-zflip6-002",
+        deviceModelId: "device-z-flip-6",
+        listPrice: 1370000,
+        discountApplied: false,
+        discountAmount: 0,
+        discountedPrice: 1370000,
+        subsidyAmount: 0,
+        finalSalePrice: 1370000,
+        cashAmount: 370000,
+        cardAmount: 1000000,
+        bankTransferAmount: 0,
+        cardInstallmentMonths: 12,
+        actualReceivedAmount: 1370000,
+        receivableAmount: 0,
+        deviceCostAmount: 1180000,
+        rebateAmount: 0,
+        policyRevenueAmount: 0,
+        profitCalculationBaseAmount: 1370000,
+        profitDeductionAmount: 0,
+        totalProfitAmount: 190000,
+        appliedSaleProfitPolicyName: "이전 판매 기준 데이터",
+      },
     ],
   });
 
@@ -543,7 +767,7 @@ async function main() {
       {
         saleId: "sale-20260411-kim",
         addOnServiceId: "service-kt-insurance",
-        nameSnapshot: "KT 폰 안심보험",
+        nameSnapshot: "KT 휴대폰 보험",
         monthlyFee: 7900,
       },
       {
@@ -591,6 +815,7 @@ async function main() {
     data: [
       {
         id: "payment-kim-1",
+        storeId: "store-gangnam",
         receivableId: "receivable-sale-kim",
         saleId: "sale-20260411-kim",
         staffId: "user-park-sy",
@@ -598,6 +823,21 @@ async function main() {
         amount: 120000,
         method: PaymentMethod.BANK_TRANSFER,
         memo: "1차 부분 수납",
+      },
+      {
+        id: "payment-kim-canceled",
+        storeId: "store-gangnam",
+        receivableId: "receivable-sale-kim",
+        saleId: "sale-20260411-kim",
+        staffId: "user-park-sy",
+        canceledById: "user-admin",
+        paymentDate: at("2026-04-12T11:30:00+09:00"),
+        amount: 30000,
+        method: PaymentMethod.CASH,
+        status: PaymentStatus.CANCELED,
+        memo: "중복으로 잘못 등록된 현금 수납",
+        canceledAt: at("2026-04-12T11:40:00+09:00"),
+        cancellationReason: "중복 입력 정정",
       },
     ],
   });

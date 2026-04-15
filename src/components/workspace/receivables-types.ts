@@ -6,6 +6,7 @@ export type ReceivablesNotice =
   | "invalid-payment-form"
   | "receivable-not-found"
   | "payment-not-found"
+  | "payment-cancel-reason-required"
   | "payment-over-balance";
 
 export interface ReceivableCustomerOption {
@@ -21,6 +22,10 @@ export interface ReceivablePaymentRecord {
   method: PaymentMethodValue;
   status: PaymentStatusValue;
   memo: string | null;
+  createdAt: Date;
+  canceledAt: Date | null;
+  cancellationReason: string | null;
+  canceledByName: string | null;
   staffName: string;
 }
 

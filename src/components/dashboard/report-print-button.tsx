@@ -1,9 +1,11 @@
 "use client";
 
+import { primaryButtonClassName } from "@/components/workspace/ui-classnames";
+
 export function ReportPrintButton() {
   return (
     <button
-      className="inline-flex rounded-full border border-slate-950/10 bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+      className={`${primaryButtonClassName} h-10 px-4`}
       onClick={() => window.print()}
       type="button"
     >

@@ -1,0 +1,413 @@
+import type {
+  SalesFilters,
+  SalesNotice,
+  SalesStatusFilterValue,
+} from "@/components/workspace/sales-types";
+import { getCurrentUser } from "@/lib/auth/dal";
+import { formatKstDate, parseKstDateInput } from "@/lib/date-utils";
+import { prisma } from "@/lib/prisma";
+
+const salesPageSize = 10;
+
+export type SalesSearchParams = {
+  q?: string | string[];
+  carrierId?: string | string[];
+  storeId?: string | string[];
+  status?: string | string[];
+  dateFrom?: string | string[];
+  dateTo?: string | string[];
+  page?: string | string[];
+  notice?: string | string[];
+};
+
+function readSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+function readPageNumber(value: string | string[] | undefined) {
+  const parsed = Number.parseInt(readSearchParam(value), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function isNoticeValue(value: string): value is SalesNotice {
+  return (
+    value === "invalid-sale-form" ||
+    value === "sale-customer-not-found" ||
+    value === "sale-inventory-unavailable" ||
+    value === "sale-rate-plan-mismatch" ||
+    value === "sale-service-mismatch" ||
+    value === "sale-overpayment" ||
+    value === "sale-discount-rule-missing" ||
+    value === "sale-not-found" ||
+    value === "sale-cancel-blocked"
+  );
+}
+
+function isSalesStatusFilterValue(value: string): value is SalesStatusFilterValue {
+  return value === "all" || value === "COMPLETED" || value === "CANCELED";
+}
+
+export async function getSalesCommonPageData() {
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser) {
+    return null;
+  }
+
+  const [
+    customers,
+    stores,
+    activeCarriers,
+    sharedServices,
+    rebatePolicies,
+    saleProfitPolicies,
+    discountPolicies,
+    availableInventory,
+  ] = await Promise.all([
+    prisma.customer.findMany({
+      where: { isHidden: false },
+      orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        currentCarrier: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
+    prisma.store.findMany({
+      where: { isActive: true },
+      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.carrier.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      include: {
+        ratePlans: {
+          where: { isActive: true },
+          orderBy: [{ monthlyFee: "desc" }, { name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            monthlyFee: true,
+          },
+        },
+        services: {
+          where: { isActive: true },
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            name: true,
+            monthlyFee: true,
+          },
+        },
+      },
+    }),
+    prisma.addOnService.findMany({
+      where: {
+        isActive: true,
+        carrierId: null,
+      },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        monthlyFee: true,
+      },
+    }),
+    prisma.rebatePolicy.findMany({
+      where: { isActive: true },
+      orderBy: [{ startsAt: "desc" }, { name: "asc" }],
+      include: {
+        carrier: { select: { name: true } },
+        deviceModel: { select: { name: true } },
+      },
+    }),
+    prisma.saleProfitPolicy.findMany({
+      where: { isActive: true },
+      orderBy: [{ startsAt: "desc" }, { name: "asc" }],
+      include: {
+        carrier: { select: { name: true } },
+      },
+    }),
+    prisma.discountPolicy.findMany({
+      where: { isActive: true },
+      orderBy: [{ startsAt: "desc" }, { name: "asc" }],
+      include: {
+        carrier: { select: { name: true } },
+        deviceModel: { select: { name: true } },
+      },
+    }),
+    prisma.inventoryItem.findMany({
+      where: {
+        status: "IN_STOCK",
+        isHidden: false,
+        carrier: { isActive: true },
+        deviceModel: { isActive: true },
+      },
+      orderBy: [{ receivedAt: "asc" }, { createdAt: "asc" }],
+      include: {
+        carrier: { select: { name: true } },
+        deviceModel: { select: { name: true } },
+      },
+    }),
+  ]);
+
+  return {
+    currentUserName: currentUser.displayName,
+    defaultSaleDate: formatKstDate(new Date()),
+    customers: customers.map((customer) => ({
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+      currentCarrierName: customer.currentCarrier?.name ?? null,
+    })),
+    stores,
+    carriers: activeCarriers.map((carrier) => ({
+      id: carrier.id,
+      name: carrier.name,
+      code: carrier.code,
+      ratePlans: carrier.ratePlans,
+      addOnServices: [
+        ...sharedServices.map((service) => ({
+          id: service.id,
+          name: `공통 / ${service.name}`,
+          monthlyFee: service.monthlyFee,
+          scope: "shared" as const,
+        })),
+        ...carrier.services.map((service) => ({
+          id: service.id,
+          name: service.name,
+          monthlyFee: service.monthlyFee,
+          scope: "carrier" as const,
+        })),
+      ],
+    })),
+    rebatePolicies: rebatePolicies.map((policy) => ({
+      id: policy.id,
+      name: policy.name,
+      carrierId: policy.carrierId,
+      carrierName: policy.carrier.name,
+      deviceModelId: policy.deviceModelId,
+      deviceModelName: policy.deviceModel.name,
+      startsAt: policy.startsAt.toISOString(),
+      endsAt: policy.endsAt.toISOString(),
+      defaultRebateAmount: policy.defaultRebateAmount,
+    })),
+    saleProfitPolicies: saleProfitPolicies.map((policy) => ({
+      id: policy.id,
+      name: policy.name,
+      carrierId: policy.carrierId,
+      carrierName: policy.carrier.name,
+      startsAt: policy.startsAt.toISOString(),
+      endsAt: policy.endsAt.toISOString(),
+      calculationMethod: policy.calculationMethod,
+      calculationValue: policy.calculationValue,
+    })),
+    discountPolicies: discountPolicies.map((policy) => ({
+      id: policy.id,
+      name: policy.name,
+      target: policy.target,
+      carrierId: policy.carrierId,
+      carrierName: policy.carrier?.name ?? null,
+      deviceModelId: policy.deviceModelId,
+      deviceModelName: policy.deviceModel?.name ?? null,
+      startsAt: policy.startsAt.toISOString(),
+      endsAt: policy.endsAt.toISOString(),
+      discountMethod: policy.discountMethod,
+      discountValue: policy.discountValue,
+    })),
+    availableInventory: availableInventory.map((item) => ({
+      id: item.id,
+      carrierId: item.carrierId,
+      carrierName: item.carrier.name,
+      deviceModelId: item.deviceModelId,
+      deviceModelName: item.deviceModel.name,
+      color: item.color,
+      capacity: item.capacity,
+      imei: item.imei,
+      costAmount: item.costAmount,
+      receivedAt: item.receivedAt.toISOString(),
+    })),
+  };
+}
+
+export async function getSalesOverviewPageData(searchParams: SalesSearchParams) {
+  const commonData = await getSalesCommonPageData();
+
+  if (!commonData) {
+    return null;
+  }
+
+  const q = readSearchParam(searchParams.q);
+  const carrierId = readSearchParam(searchParams.carrierId);
+  const storeId = readSearchParam(searchParams.storeId);
+  const statusValue = readSearchParam(searchParams.status) || "all";
+  const requestedPage = readPageNumber(searchParams.page);
+  const noticeValue = readSearchParam(searchParams.notice);
+  const normalizedQuery = q.replace(/\D/g, "");
+
+  let dateFrom = readSearchParam(searchParams.dateFrom);
+  let dateTo = readSearchParam(searchParams.dateTo);
+
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    [dateFrom, dateTo] = [dateTo, dateFrom];
+  }
+
+  const notice = isNoticeValue(noticeValue) ? noticeValue : null;
+  const status = isSalesStatusFilterValue(statusValue) ? statusValue : "all";
+
+  const filters: SalesFilters = {
+    q,
+    carrierId,
+    storeId,
+    status,
+    dateFrom,
+    dateTo,
+  };
+
+  const salesSearchClauses = q
+    ? [
+        { customer: { name: { contains: q } } },
+        { customer: { phone: { contains: q } } },
+        { carrier: { name: { contains: q } } },
+        { deviceModel: { name: { contains: q } } },
+        { staff: { displayName: { contains: q } } },
+        { inventoryItem: { imei: { contains: q } } },
+        ...(normalizedQuery
+          ? [{ customer: { normalizedPhone: { contains: normalizedQuery } } }]
+          : []),
+      ]
+    : [];
+
+  const salesWhere = {
+    ...(salesSearchClauses.length > 0 ? { OR: salesSearchClauses } : {}),
+    ...(carrierId ? { carrierId } : {}),
+    ...(storeId ? { storeId } : {}),
+    ...(status !== "all" ? { status } : {}),
+    ...(dateFrom || dateTo
+      ? {
+          saleDate: {
+            ...(dateFrom ? { gte: parseKstDateInput(dateFrom, "start") } : {}),
+            ...(dateTo ? { lte: parseKstDateInput(dateTo, "end") } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const [
+    filteredSalesCount,
+    filteredCompletedSalesCount,
+    filteredCompletedSalesAggregate,
+    filteredOutstandingSalesCount,
+  ] = await Promise.all([
+    prisma.sale.count({ where: salesWhere }),
+    prisma.sale.count({
+      where: {
+        ...salesWhere,
+        status: "COMPLETED",
+      },
+    }),
+    prisma.sale.aggregate({
+      where: {
+        ...salesWhere,
+        status: "COMPLETED",
+      },
+      _sum: {
+        finalSalePrice: true,
+      },
+    }),
+    prisma.sale.count({
+      where: {
+        ...salesWhere,
+        receivable: {
+          is: {
+            balanceAmount: {
+              gt: 0,
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSalesCount / salesPageSize));
+  const page = Math.min(requestedPage, totalPages);
+
+  const sales = await prisma.sale.findMany({
+    where: salesWhere,
+    skip: (page - 1) * salesPageSize,
+    take: salesPageSize,
+    orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
+    include: {
+      customer: { select: { name: true, phone: true } },
+      carrier: { select: { name: true } },
+      deviceModel: { select: { name: true } },
+      inventoryItem: { select: { imei: true } },
+      store: { select: { name: true } },
+      ratePlan: { select: { name: true } },
+      staff: { select: { displayName: true } },
+      selectedServices: { select: { nameSnapshot: true } },
+      receivable: { select: { balanceAmount: true, status: true } },
+      payments: {
+        where: { status: "COMPLETED" },
+        select: { id: true },
+      },
+    },
+  });
+
+  return {
+    ...commonData,
+    notice,
+    filters,
+    pagination: {
+      page,
+      pageSize: salesPageSize,
+      totalCount: filteredSalesCount,
+      totalPages,
+    },
+    metrics: {
+      completedCount: filteredCompletedSalesCount,
+      completedRevenue: filteredCompletedSalesAggregate._sum.finalSalePrice ?? 0,
+      outstandingCount: filteredOutstandingSalesCount,
+    },
+    sales: sales.map((sale) => ({
+      id: sale.id,
+      saleDate: sale.saleDate.toISOString(),
+      status: sale.status,
+      canceledAt: sale.canceledAt?.toISOString() ?? null,
+      cancellationReason: sale.cancellationReason,
+      storeName: sale.store?.name ?? null,
+      customerName: sale.customer.name,
+      customerPhone: sale.customer.phone,
+      carrierName: sale.carrier.name,
+      deviceModelName: sale.deviceModel.name,
+      inventoryImei: sale.inventoryItem.imei,
+      ratePlanName: sale.ratePlan?.name ?? null,
+      staffName: sale.staff.displayName,
+      subsidyAmount: sale.subsidyAmount,
+      finalSalePrice: sale.finalSalePrice,
+      discountApplied: sale.discountApplied,
+      discountMethod: sale.discountMethod,
+      discountValue: sale.discountValue,
+      rebateAmount: sale.rebateAmount,
+      policyRevenueAmount: sale.policyRevenueAmount,
+      receivableAmount: sale.receivableAmount,
+      receivableBalance: sale.receivable?.balanceAmount ?? 0,
+      receivableStatus: sale.receivable?.status ?? null,
+      selectedServices: sale.selectedServices.map((service) => service.nameSnapshot),
+      appliedDiscountPolicyName: sale.appliedDiscountPolicyName,
+      appliedRebatePolicyName: sale.appliedRebatePolicyName,
+      appliedSaleProfitPolicyName: sale.appliedSaleProfitPolicyName,
+      canCancel: sale.status === "COMPLETED" && sale.payments.length === 0,
+      hasPayments: sale.payments.length > 0,
+    })),
+  };
+}

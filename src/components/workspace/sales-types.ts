@@ -6,6 +6,7 @@ export type RevenueCalculationMethodValue =
   | "PERCENTAGE";
 export type SaleStatusValue = "COMPLETED" | "CANCELED";
 export type ReceivableStatusValue = "UNPAID" | "PARTIALLY_PAID" | "PAID";
+export type SalesStatusFilterValue = "all" | SaleStatusValue;
 
 export type SalesNotice =
   | "invalid-sale-form"
@@ -40,6 +41,33 @@ export interface SalesCustomerRecord {
   name: string;
   phone: string;
   currentCarrierName: string | null;
+}
+
+export interface SalesFilters {
+  q: string;
+  carrierId: string;
+  storeId: string;
+  status: SalesStatusFilterValue;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface SalesStoreRecord {
+  id: string;
+  name: string;
+}
+
+export interface SalesPagination {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+export interface SalesMetrics {
+  completedCount: number;
+  completedRevenue: number;
+  outstandingCount: number;
 }
 
 export interface SalesRebatePolicyRecord {
@@ -98,11 +126,15 @@ export interface SalesRecord {
   status: SaleStatusValue;
   canceledAt: string | null;
   cancellationReason: string | null;
+  storeName: string | null;
   customerName: string;
+  customerPhone: string;
   carrierName: string;
   deviceModelName: string;
+  inventoryImei: string;
   ratePlanName: string | null;
   staffName: string;
+  subsidyAmount: number;
   finalSalePrice: number;
   discountApplied: boolean;
   discountMethod: DiscountMethodValue | null;
