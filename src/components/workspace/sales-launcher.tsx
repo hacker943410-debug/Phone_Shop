@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 
 import { CustomerUpsertDialog } from "@/components/workspace/customer-upsert-dialog";
 import { SalesEntryForm } from "@/components/workspace/sales-entry-form";
+import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 import type {
   SalesAvailableInventoryRecord,
   SalesCarrierRecord,
@@ -14,7 +15,6 @@ import type {
 } from "@/components/workspace/sales-types";
 import { primaryButtonClassName } from "@/components/workspace/ui-classnames";
 import type { CustomerUpsertActionCustomer } from "@/lib/customer-upsert-action-state";
-import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 
 type LauncherView =
   | "chooser"
@@ -178,7 +178,7 @@ export function SalesLauncher({
         onClick={() => setView("chooser")}
         type="button"
       >
-        판매 등록 화면 열기
+        판매 등록
       </button>
 
       {view === "chooser" ? (
