@@ -14,8 +14,9 @@ export default async function PoliciesPage() {
   const [
     carriers,
     deviceModels,
-    rebatePolicies,
+    staffs,
     saleProfitPolicies,
+    staffCommissionPolicies,
     discountPolicies,
     carrierActivationRules,
   ] = await Promise.all([
@@ -28,7 +29,7 @@ export default async function PoliciesPage() {
       },
     }),
     prisma.deviceModel.findMany({
-      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      orderBy: [{ isActive: "desc" }, { manufacturer: "asc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,
@@ -36,42 +37,59 @@ export default async function PoliciesPage() {
         isActive: true,
       },
     }),
-    prisma.rebatePolicy.findMany({
-      orderBy: [{ isActive: "desc" }, { startsAt: "desc" }, { name: "asc" }],
+    prisma.user.findMany({
+      where: {
+        role: {
+          in: ["ADMIN", "STAFF"],
+        },
+      },
+      orderBy: [{ isActive: "desc" }, { displayName: "asc" }, { username: "asc" }],
+      select: {
+        id: true,
+        displayName: true,
+        username: true,
+        isActive: true,
+      },
+    }),
+    prisma.saleProfitPolicy.findMany({
+      orderBy: [{ isActive: "desc" }, { carrier: { name: "asc" } }],
       include: {
         carrier: {
-          select: {
-            name: true,
-          },
-        },
-        deviceModel: {
           select: {
             name: true,
           },
         },
       },
     }),
-    prisma.saleProfitPolicy.findMany({
-      orderBy: [{ isActive: "desc" }, { startsAt: "desc" }, { name: "asc" }],
+    prisma.staffCommissionPolicy.findMany({
+      where: {
+        staffId: {
+          not: null,
+        },
+      },
+      orderBy: [{ isActive: "desc" }, { staff: { displayName: "asc" } }, { startsAt: "desc" }],
       include: {
-        carrier: {
+        staff: {
           select: {
-            name: true,
+            displayName: true,
+            username: true,
           },
         },
       },
     }),
     prisma.discountPolicy.findMany({
-      orderBy: [{ isActive: "desc" }, { startsAt: "desc" }, { name: "asc" }],
-      include: {
-        carrier: {
-          select: {
-            name: true,
-          },
+      where: {
+        target: "DEVICE",
+        deviceModelId: {
+          not: null,
         },
+      },
+      orderBy: [{ isActive: "desc" }, { deviceModel: { name: "asc" } }, { startsAt: "desc" }],
+      include: {
         deviceModel: {
           select: {
             name: true,
+            manufacturer: true,
           },
         },
       },
@@ -92,19 +110,7 @@ export default async function PoliciesPage() {
     <PoliciesOverview
       carriers={carriers}
       deviceModels={deviceModels}
-      rebatePolicies={rebatePolicies.map((policy) => ({
-        id: policy.id,
-        name: policy.name,
-        carrierId: policy.carrierId,
-        carrierName: policy.carrier.name,
-        deviceModelId: policy.deviceModelId,
-        deviceModelName: policy.deviceModel.name,
-        startsAt: policy.startsAt,
-        endsAt: policy.endsAt,
-        defaultRebateAmount: policy.defaultRebateAmount,
-        memo: policy.memo,
-        isActive: policy.isActive,
-      }))}
+      staffs={staffs}
       saleProfitPolicies={saleProfitPolicies.map((policy) => ({
         id: policy.id,
         name: policy.name,
@@ -117,14 +123,25 @@ export default async function PoliciesPage() {
         memo: policy.memo,
         isActive: policy.isActive,
       }))}
+      staffCommissionPolicies={staffCommissionPolicies.map((policy) => ({
+        id: policy.id,
+        name: policy.name,
+        staffId: policy.staffId ?? "",
+        staffName: policy.staff?.displayName ?? policy.name,
+        staffCode: policy.staff?.username ?? "-",
+        startsAt: policy.startsAt,
+        endsAt: policy.endsAt,
+        calculationMethod: policy.calculationMethod,
+        calculationValue: policy.calculationValue,
+        memo: policy.memo,
+        isActive: policy.isActive,
+      }))}
       discountPolicies={discountPolicies.map((policy) => ({
         id: policy.id,
         name: policy.name,
-        target: policy.target,
-        carrierId: policy.carrierId,
-        carrierName: policy.carrier?.name ?? null,
-        deviceModelId: policy.deviceModelId,
-        deviceModelName: policy.deviceModel?.name ?? null,
+        deviceModelId: policy.deviceModelId ?? "",
+        deviceModelName: policy.deviceModel?.name ?? policy.name,
+        manufacturer: policy.deviceModel?.manufacturer ?? null,
         startsAt: policy.startsAt,
         endsAt: policy.endsAt,
         discountMethod: policy.discountMethod,

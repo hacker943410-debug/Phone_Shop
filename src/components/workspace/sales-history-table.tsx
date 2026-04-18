@@ -271,9 +271,6 @@ export function SalesHistoryTable({
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setActiveSaleId(null);
@@ -283,7 +280,6 @@ export function SalesHistoryTable({
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [activeSale]);
@@ -560,8 +556,12 @@ export function SalesHistoryTable({
                         value={formatWon(activeSale.rebateAmount)}
                       />
                       <InfoRow
-                        label="정책 수익"
+                        label="통신사 할인"
                         value={formatWon(activeSale.policyRevenueAmount)}
+                      />
+                      <InfoRow
+                        label="직원 수수료"
+                        value={formatWon(activeSale.profitDeductionAmount)}
                       />
                       <InfoRow
                         label="최초 미수"
@@ -574,16 +574,16 @@ export function SalesHistoryTable({
                     <h4 className="text-sm font-semibold text-slate-950">정책 적용 내역</h4>
                     <div className="mt-3">
                       <InfoRow
-                        label="할인 정책"
+                        label="단말기 할인 정책"
                         value={activeSale.appliedDiscountPolicyName ?? "미적용"}
                       />
                       <InfoRow
-                        label="리베이트 정책"
-                        value={activeSale.appliedRebatePolicyName ?? "없음"}
+                        label="통신사 할인 정책"
+                        value={activeSale.appliedSaleProfitPolicyName ?? "없음"}
                       />
                       <InfoRow
-                        label="수익 정책"
-                        value={activeSale.appliedSaleProfitPolicyName ?? "없음"}
+                        label="직원 수수료 정책"
+                        value={activeSale.appliedStaffCommissionPolicyName ?? "없음"}
                       />
                     </div>
                   </section>

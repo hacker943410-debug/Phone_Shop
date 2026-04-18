@@ -38,13 +38,13 @@ export function WorkspaceModalShell({
 }: WorkspaceModalShellProps) {
   return (
     <div
-      className="dashboard-dialog-backdrop fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-[rgba(15,23,42,0.42)] px-4 py-4 sm:px-6 sm:py-6"
+      className="dashboard-dialog-backdrop fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto overscroll-y-contain bg-[rgba(15,23,42,0.42)] px-4 py-3 sm:px-6 sm:py-6"
       onClick={onClose}
     >
       <div
         aria-modal="true"
         className={joinClassNames(
-          "dashboard-dialog-panel flex max-h-[min(90vh,60rem)] w-full flex-col overflow-hidden rounded-[1.7rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] shadow-[0_42px_90px_-34px_rgba(15,23,42,0.5)] backdrop-blur",
+          "dashboard-dialog-panel flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-[1.7rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] shadow-[0_42px_90px_-34px_rgba(15,23,42,0.5)] backdrop-blur sm:max-h-[calc(100dvh-3rem)]",
           maxWidthClassName,
         )}
         onClick={(event) => event.stopPropagation()}
@@ -73,7 +73,7 @@ export function WorkspaceModalShell({
         </div>
         <div
           className={joinClassNames(
-            "min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6",
+            "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-5 sm:px-6",
             contentClassName,
           )}
         >

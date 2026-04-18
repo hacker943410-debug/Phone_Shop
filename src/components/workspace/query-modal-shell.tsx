@@ -29,9 +29,6 @@ export function QueryModalShell({
   }, [closeHref, router]);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         closeModal();
@@ -41,7 +38,6 @@ export function QueryModalShell({
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [closeModal]);

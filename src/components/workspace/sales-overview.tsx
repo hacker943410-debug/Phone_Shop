@@ -15,8 +15,8 @@ import type {
   SalesNotice,
   SalesPagination,
   SalesRecord,
-  SalesRebatePolicyRecord,
   SalesSaleProfitPolicyRecord,
+  SalesStaffCommissionPolicyRecord,
   SalesStoreRecord,
 } from "@/components/workspace/sales-types";
 import {
@@ -31,6 +31,7 @@ import { formatWon } from "@/lib/formatters";
 import { buildSalesHref } from "@/lib/sales-url-state";
 
 const noticeMessageMap: Record<SalesNotice, string> = {
+  "sale-created": "판매가 등록되었습니다. 판매 이력과 재고 상태를 최신 기준으로 반영했습니다.",
   "invalid-sale-form":
     "판매 등록 값이 비어 있거나 올바르지 않습니다. 고객, 재고, 금액 입력값을 다시 확인해 주세요.",
   "sale-customer-not-found":
@@ -143,6 +144,7 @@ function StaffIcon() {
 }
 
 export interface SalesOverviewProps {
+  currentUserId: string;
   currentUserName: string;
   defaultSaleDate: string;
   notice: SalesNotice | null;
@@ -152,14 +154,15 @@ export interface SalesOverviewProps {
   customers: SalesCustomerRecord[];
   stores: SalesStoreRecord[];
   carriers: SalesCarrierRecord[];
-  rebatePolicies: SalesRebatePolicyRecord[];
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
+  staffCommissionPolicies: SalesStaffCommissionPolicyRecord[];
   discountPolicies: SalesDiscountPolicyRecord[];
   availableInventory: SalesAvailableInventoryRecord[];
   sales: SalesRecord[];
 }
 
 export function SalesOverview({
+  currentUserId,
   currentUserName,
   defaultSaleDate,
   notice,
@@ -169,8 +172,8 @@ export function SalesOverview({
   customers,
   stores,
   carriers,
-  rebatePolicies,
   saleProfitPolicies,
+  staffCommissionPolicies,
   discountPolicies,
   availableInventory,
   sales,
@@ -185,7 +188,7 @@ export function SalesOverview({
     ),
   ).size;
   const totalPolicyCount =
-    rebatePolicies.length + saleProfitPolicies.length + discountPolicies.length;
+    saleProfitPolicies.length + staffCommissionPolicies.length + discountPolicies.length;
   const filterTone =
     filters.status === "all"
       ? "slate"
@@ -206,12 +209,13 @@ export function SalesOverview({
             <SalesLauncher
               availableInventory={availableInventory}
               carriers={carriers}
+              currentUserId={currentUserId}
               currentUserName={currentUserName}
               customers={customers}
               defaultSaleDate={defaultSaleDate}
               discountPolicies={discountPolicies}
-              rebatePolicies={rebatePolicies}
               saleProfitPolicies={saleProfitPolicies}
+              staffCommissionPolicies={staffCommissionPolicies}
             />
           </>
         }

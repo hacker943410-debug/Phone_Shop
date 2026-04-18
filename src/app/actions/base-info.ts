@@ -1,8 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { requireRole } from "@/lib/auth/dal";
+import {
+  createDatabaseBackup,
+  readBackupSettings,
+  restoreDatabaseBackup,
+  saveBackupSettings,
+} from "@/lib/backup-storage";
 import { prisma } from "@/lib/prisma";
 
 function readText(formData: FormData, key: string) {
@@ -32,18 +39,49 @@ function readInt(formData: FormData, key: string) {
 
 function revalidateBaseInfoViews() {
   revalidatePath("/settings/base");
+  revalidatePath("/settings/policies");
   revalidatePath("/sales");
+  revalidatePath("/sales/new");
   revalidatePath("/inventory");
+  revalidatePath("/customers");
+  revalidatePath("/receivables");
+  revalidatePath("/reports/summary");
   revalidatePath("/");
+}
+
+function redirectToBaseInfo(tab: string, notice: string): never {
+  redirect(`/settings/base?tab=${tab}&notice=${notice}`);
+}
+
+async function generateNextStoreCode() {
+  const stores = await prisma.store.findMany({
+    select: {
+      code: true,
+    },
+  });
+
+  const nextSequence =
+    stores.reduce((maxValue, store) => {
+      const match = /^STORE(\d+)$/.exec(store.code);
+
+      if (!match) {
+        return maxValue;
+      }
+
+      return Math.max(maxValue, Number.parseInt(match[1] ?? "0", 10));
+    }, 0) + 1;
+
+  return `STORE${String(nextSequence).padStart(3, "0")}`;
 }
 
 export async function upsertStoreAction(formData: FormData) {
   await requireRole("ADMIN");
 
   const id = readOptionalText(formData, "id");
-  const code = readText(formData, "code").toUpperCase();
+  const rawCode = readText(formData, "code").toUpperCase();
   const name = readText(formData, "name");
   const region = readOptionalText(formData, "region");
+  const code = id ? rawCode : await generateNextStoreCode();
 
   if (!code || !name) {
     return;
@@ -163,20 +201,46 @@ export async function upsertRatePlanAction(formData: FormData) {
   const carrierId = readText(formData, "carrierId");
   const name = readText(formData, "name");
   const monthlyFee = readInt(formData, "monthlyFee");
+  const voiceCallMinutes = readInt(formData, "voiceCallMinutes");
+  const videoCallMinutes = readInt(formData, "videoCallMinutes");
+  const dataAllowanceGb = readInt(formData, "dataAllowanceGb");
   const description = readOptionalText(formData, "description");
 
-  if (!carrierId || !name || monthlyFee === null) {
+  if (
+    !carrierId ||
+    !name ||
+    monthlyFee === null ||
+    voiceCallMinutes === null ||
+    videoCallMinutes === null ||
+    dataAllowanceGb === null
+  ) {
     return;
   }
 
   if (id) {
     await prisma.ratePlan.update({
       where: { id },
-      data: { carrierId, name, monthlyFee, description },
+      data: {
+        carrierId,
+        name,
+        monthlyFee,
+        voiceCallMinutes,
+        videoCallMinutes,
+        dataAllowanceGb,
+        description,
+      },
     });
   } else {
     await prisma.ratePlan.create({
-      data: { carrierId, name, monthlyFee, description },
+      data: {
+        carrierId,
+        name,
+        monthlyFee,
+        voiceCallMinutes,
+        videoCallMinutes,
+        dataAllowanceGb,
+        description,
+      },
     });
   }
 
@@ -254,4 +318,72 @@ export async function toggleAddOnServiceActiveAction(formData: FormData) {
   });
 
   revalidateBaseInfoViews();
+}
+
+export async function saveBackupDirectoryAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const backupDirectory = readText(formData, "backupDirectory");
+
+  try {
+    await saveBackupSettings(backupDirectory);
+  } catch (error) {
+    if (error instanceof Error && error.message === "backup-path-required") {
+      redirectToBaseInfo("backup", "backup-path-required");
+    }
+
+    redirectToBaseInfo("backup", "backup-path-invalid");
+  }
+
+  revalidateBaseInfoViews();
+  redirectToBaseInfo("backup", "backup-path-saved");
+}
+
+export async function createBackupAction() {
+  await requireRole("ADMIN");
+
+  const { backupDirectory } = await readBackupSettings();
+
+  if (!backupDirectory) {
+    redirectToBaseInfo("backup", "backup-path-required");
+  }
+
+  try {
+    await prisma.$disconnect();
+    await createDatabaseBackup(backupDirectory);
+  } catch {
+    redirectToBaseInfo("backup", "backup-create-failed");
+  }
+
+  revalidateBaseInfoViews();
+  redirectToBaseInfo("backup", "backup-created");
+}
+
+export async function restoreBackupAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const fileName = readText(formData, "fileName");
+  const { backupDirectory } = await readBackupSettings();
+
+  if (!backupDirectory) {
+    redirectToBaseInfo("restore", "backup-path-required");
+  }
+
+  if (!fileName) {
+    redirectToBaseInfo("restore", "backup-file-missing");
+  }
+
+  try {
+    await prisma.$disconnect();
+    await restoreDatabaseBackup(backupDirectory, fileName);
+  } catch (error) {
+    if (error instanceof Error && error.message === "backup-file-missing") {
+      redirectToBaseInfo("restore", "backup-file-missing");
+    }
+
+    redirectToBaseInfo("restore", "backup-restore-failed");
+  }
+
+  revalidateBaseInfoViews();
+  redirectToBaseInfo("restore", "backup-restored");
 }

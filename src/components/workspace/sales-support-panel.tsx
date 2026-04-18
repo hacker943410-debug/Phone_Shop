@@ -5,8 +5,8 @@ import type {
   SalesAvailableInventoryRecord,
   SalesCarrierRecord,
   SalesDiscountPolicyRecord,
-  SalesRebatePolicyRecord,
   SalesSaleProfitPolicyRecord,
+  SalesStaffCommissionPolicyRecord,
 } from "@/components/workspace/sales-types";
 import { Panel, TonePill } from "@/components/workspace/workspace-primitives";
 import { formatWon } from "@/lib/formatters";
@@ -40,12 +40,7 @@ function getSaleProfitLabel(
 }
 
 function getDiscountPolicyLabel(policy: SalesDiscountPolicyRecord) {
-  const targetLabel =
-    policy.target === "CARRIER"
-      ? (policy.carrierName ?? "통신사 기준")
-      : (policy.deviceModelName ?? "기종 기준");
-
-  return `${targetLabel} / ${getDiscountValueLabel(
+  return `${policy.deviceModelName} / ${getDiscountValueLabel(
     policy.discountMethod,
     policy.discountValue,
   )}`;
@@ -53,16 +48,16 @@ function getDiscountPolicyLabel(policy: SalesDiscountPolicyRecord) {
 
 export interface SalesSupportPanelProps {
   carriers: SalesCarrierRecord[];
-  rebatePolicies: SalesRebatePolicyRecord[];
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
+  staffCommissionPolicies: SalesStaffCommissionPolicyRecord[];
   discountPolicies: SalesDiscountPolicyRecord[];
   availableInventory: SalesAvailableInventoryRecord[];
 }
 
 export function SalesSupportPanel({
   carriers,
-  rebatePolicies,
   saleProfitPolicies,
+  staffCommissionPolicies,
   discountPolicies,
   availableInventory,
 }: SalesSupportPanelProps) {
@@ -76,13 +71,13 @@ export function SalesSupportPanel({
     ),
   ).size;
   const totalPolicyCount =
-    rebatePolicies.length + saleProfitPolicies.length + discountPolicies.length;
+    saleProfitPolicies.length +
+    staffCommissionPolicies.length +
+    discountPolicies.length;
   const inventoryPreview = availableInventory.slice(0, 12);
 
   return (
-    <Panel
-      title="판매 지원 정보"
-    >
+    <Panel title="판매 지원 정보">
       <div className="space-y-4">
         <section className="space-y-2">
           <div className="flex items-center justify-between">
@@ -102,8 +97,8 @@ export function SalesSupportPanel({
                   <TonePill label={carrier.code} tone="teal" />
                 </div>
                 <p className="mt-2 text-sm text-slate-600">
-                  요금제 {carrier.ratePlans.length}건 / 부가서비스{" "}
-                  {carrier.addOnServices.length}건
+                  요금제 {carrier.ratePlans.length}개 / 부가서비스{" "}
+                  {carrier.addOnServices.length}개
                 </p>
               </article>
             ))}
@@ -113,24 +108,10 @@ export function SalesSupportPanel({
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900">적용 정책 요약</h3>
-            <TonePill label={`${totalPolicyCount}건`} tone="amber" />
+            <TonePill label={`${totalPolicyCount}개`} tone="amber" />
           </div>
           <div className="grid gap-3">
-            {rebatePolicies.slice(0, 3).map((policy) => (
-              <article
-                key={policy.id}
-                className="rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-slate-700"
-              >
-                <p className="font-semibold text-slate-950">{policy.name}</p>
-                <p className="mt-1">
-                  {policy.carrierName} / {policy.deviceModelName}
-                </p>
-                <p className="mt-1 text-slate-500">
-                  {formatWon(policy.defaultRebateAmount)}
-                </p>
-              </article>
-            ))}
-            {saleProfitPolicies.slice(0, 2).map((policy) => (
+            {saleProfitPolicies.slice(0, 3).map((policy) => (
               <article
                 key={policy.id}
                 className="rounded-lg border border-blue-200 bg-blue-50/80 px-4 py-3 text-sm text-slate-700"
@@ -145,12 +126,27 @@ export function SalesSupportPanel({
                 </p>
               </article>
             ))}
-            {discountPolicies.slice(0, 2).map((policy) => (
+            {staffCommissionPolicies.slice(0, 3).map((policy) => (
+              <article
+                key={policy.id}
+                className="rounded-lg border border-rose-200 bg-rose-50/80 px-4 py-3 text-sm text-slate-700"
+              >
+                <p className="font-semibold text-slate-950">{policy.staffName}</p>
+                <p className="mt-1">@{policy.staffCode}</p>
+                <p className="mt-1 text-slate-500">
+                  {getSaleProfitLabel(
+                    policy.calculationMethod,
+                    policy.calculationValue,
+                  )}
+                </p>
+              </article>
+            ))}
+            {discountPolicies.slice(0, 3).map((policy) => (
               <article
                 key={policy.id}
                 className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-slate-700"
               >
-                <p className="font-semibold text-slate-950">{policy.name}</p>
+                <p className="font-semibold text-slate-950">{policy.deviceModelName}</p>
                 <p className="mt-1">{getDiscountPolicyLabel(policy)}</p>
               </article>
             ))}

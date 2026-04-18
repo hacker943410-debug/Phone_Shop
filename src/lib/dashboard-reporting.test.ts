@@ -130,7 +130,7 @@ describe("dashboard reporting", () => {
 
     expect(csv).toContain("PhoneShop 기간 보고서");
     expect(csv).toContain("조회 기간,2026-04-01 ~ 2026-04-12");
-    expect(csv).toContain("일자,판매 건수,판매 금액,수납 금액,리베이트,정책 수익,총이익");
+    expect(csv).toContain("일자,판매 건수,판매 금액,수납 금액,리베이트,통신사 할인,총이익");
     expect(csv).toContain("판매일,고객,통신사,기종,담당자,수납 금액,미수 금액,총이익");
     expect(csv).toContain("2026-04-11,김수현,KT,iPhone 16,박선우,988000,300000,380000");
   });

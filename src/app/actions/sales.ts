@@ -10,8 +10,8 @@ import {
   calculatePolicyRevenueAmount,
   calculateSalesAmounts,
   findMatchingDiscountPolicy,
-  findMatchingRebatePolicy,
   findMatchingSaleProfitPolicy,
+  findMatchingStaffCommissionPolicy,
 } from "@/lib/sales-calculations";
 import {
   DiscountMethod,
@@ -201,8 +201,8 @@ export async function createSaleAction(formData: FormData) {
     inventoryItem,
     availableRatePlans,
     addOnServices,
-    rebatePolicies,
     saleProfitPolicies,
+    staffCommissionPolicies,
     discountPolicies,
   ] = await Promise.all([
       resolveDefaultStoreId(),
@@ -255,20 +255,6 @@ export async function createSaleAction(formData: FormData) {
           monthlyFee: true,
         },
       }),
-      prisma.rebatePolicy.findMany({
-        where: {
-          isActive: true,
-        },
-        select: {
-          id: true,
-          name: true,
-          carrierId: true,
-          deviceModelId: true,
-          startsAt: true,
-          endsAt: true,
-          defaultRebateAmount: true,
-        },
-      }),
       prisma.saleProfitPolicy.findMany({
         where: {
           isActive: true,
@@ -283,16 +269,35 @@ export async function createSaleAction(formData: FormData) {
           calculationValue: true,
         },
       }),
-      prisma.discountPolicy.findMany({
+      prisma.staffCommissionPolicy.findMany({
         where: {
           isActive: true,
+          staffId: {
+            not: null,
+          },
         },
         select: {
           id: true,
           name: true,
-          carrierId: true,
+          staffId: true,
+          startsAt: true,
+          endsAt: true,
+          calculationMethod: true,
+          calculationValue: true,
+        },
+      }),
+      prisma.discountPolicy.findMany({
+        where: {
+          isActive: true,
+          target: "DEVICE",
+          deviceModelId: {
+            not: null,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
           deviceModelId: true,
-          target: true,
           startsAt: true,
           endsAt: true,
           discountMethod: true,
@@ -339,21 +344,37 @@ export async function createSaleAction(formData: FormData) {
   }
 
   const matchedDiscountPolicy = findMatchingDiscountPolicy(
-    discountPolicies,
+    discountPolicies.flatMap((policy) =>
+      policy.deviceModelId
+        ? [
+            {
+              ...policy,
+              deviceModelId: policy.deviceModelId,
+            },
+          ]
+        : [],
+    ),
     saleDate,
-    inventoryItem.carrierId,
-    inventoryItem.deviceModelId,
-  );
-  const matchedRebatePolicy = findMatchingRebatePolicy(
-    rebatePolicies,
-    saleDate,
-    inventoryItem.carrierId,
     inventoryItem.deviceModelId,
   );
   const matchedSaleProfitPolicy = findMatchingSaleProfitPolicy(
     saleProfitPolicies,
     saleDate,
     inventoryItem.carrierId,
+  );
+  const matchedStaffCommissionPolicy = findMatchingStaffCommissionPolicy(
+    staffCommissionPolicies.flatMap((policy) =>
+      policy.staffId
+        ? [
+            {
+              ...policy,
+              staffId: policy.staffId,
+            },
+          ]
+        : [],
+    ),
+    saleDate,
+    currentUser.id,
   );
 
   const effectiveDiscountMethod = discountApplied
@@ -367,8 +388,7 @@ export async function createSaleAction(formData: FormData) {
     redirectSalesNotice("sale-discount-rule-missing");
   }
 
-  const rebateAmount =
-    rebateAmountInput ?? matchedRebatePolicy?.defaultRebateAmount ?? 0;
+  const rebateAmount = rebateAmountInput ?? 0;
 
   const salesBaseAmounts = calculateSalesAmounts({
     listPrice,
@@ -378,6 +398,7 @@ export async function createSaleAction(formData: FormData) {
     discountValue: effectiveDiscountValue,
     rebateAmount,
     policyRevenueAmount: 0,
+    profitDeductionAmount: 0,
     cashAmount,
     cardAmount,
     bankTransferAmount,
@@ -388,6 +409,13 @@ export async function createSaleAction(formData: FormData) {
         salesBaseAmounts.finalSalePrice,
         matchedSaleProfitPolicy.calculationMethod,
         matchedSaleProfitPolicy.calculationValue,
+      )
+    : 0;
+  const profitDeductionAmount = matchedStaffCommissionPolicy
+    ? calculatePolicyRevenueAmount(
+        salesBaseAmounts.finalSalePrice,
+        matchedStaffCommissionPolicy.calculationMethod,
+        matchedStaffCommissionPolicy.calculationValue,
       )
     : 0;
 
@@ -403,6 +431,7 @@ export async function createSaleAction(formData: FormData) {
     discountValue: effectiveDiscountValue,
     rebateAmount,
     policyRevenueAmount,
+    profitDeductionAmount,
     cashAmount,
     cardAmount,
     bankTransferAmount,
@@ -471,19 +500,24 @@ export async function createSaleAction(formData: FormData) {
           deviceCostAmount: inventoryItem.costAmount,
           rebateAmount,
           policyRevenueAmount,
-          profitCalculationBaseAmount: matchedSaleProfitPolicy
+          profitCalculationBaseAmount:
+            matchedSaleProfitPolicy || matchedStaffCommissionPolicy
             ? calculationResult.profitCalculationBaseAmount
             : null,
-          profitDeductionAmount: 0,
+          profitDeductionAmount,
           totalProfitAmount: calculationResult.totalProfitAmount,
-          appliedRebatePolicyId: matchedRebatePolicy?.id ?? null,
           appliedSaleProfitPolicyId: matchedSaleProfitPolicy?.id ?? null,
+          appliedStaffCommissionPolicyId:
+            matchedStaffCommissionPolicy?.id ?? null,
           appliedDiscountPolicyId:
             manualDiscountMethod !== null
               ? null
               : (matchedDiscountPolicy?.id ?? null),
-          appliedRebatePolicyName: matchedRebatePolicy?.name ?? null,
+          appliedRebatePolicyId: null,
           appliedSaleProfitPolicyName: matchedSaleProfitPolicy?.name ?? null,
+          appliedStaffCommissionPolicyName:
+            matchedStaffCommissionPolicy?.name ?? null,
+          appliedRebatePolicyName: null,
           appliedDiscountPolicyName:
             manualDiscountMethod !== null
               ? null
@@ -540,6 +574,7 @@ export async function createSaleAction(formData: FormData) {
   }
 
   revalidateSalesViews();
+  redirectSalesNotice("sale-created");
 }
 
 export async function cancelSaleAction(formData: FormData) {

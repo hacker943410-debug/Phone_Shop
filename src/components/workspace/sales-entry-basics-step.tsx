@@ -27,7 +27,11 @@ import {
   secondaryButtonClassName,
 } from "@/components/workspace/ui-classnames";
 import { formatKstDate } from "@/lib/date-utils";
-import { formatWon } from "@/lib/formatters";
+import {
+  formatAllowanceValue,
+  formatRatePlanAllowanceSummary,
+  formatWon,
+} from "@/lib/formatters";
 
 const surfaceClassName =
   "rounded-xl border border-stone-200 bg-stone-50 p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05),0_1px_2px_rgba(15,23,42,0.08)]";
@@ -548,7 +552,9 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
     : "";
   const ratePlanSummary = selectedRatePlan?.name ?? "요금제를 선택해 주세요";
   const ratePlanMeta = selectedRatePlan
-    ? `${formatWon(selectedRatePlan.monthlyFee)} · 최근 ${selectedRatePlan.usageCount}건`
+    ? `${formatWon(selectedRatePlan.monthlyFee)} · ${formatRatePlanAllowanceSummary(
+        selectedRatePlan,
+      )} · 최근 ${selectedRatePlan.usageCount}건`
     : "";
   const serviceSummary = summarizeSelectedServices(
     props.availableAddOnServices,
@@ -1050,7 +1056,9 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
                                   {ratePlan.name}
                                 </p>
                                 <p className="mt-1 truncate text-xs text-slate-500">
-                                  {formatWon(ratePlan.monthlyFee)}
+                                  {`${formatWon(ratePlan.monthlyFee)} · ${formatRatePlanAllowanceSummary(
+                                    ratePlan,
+                                  )}`}
                                 </p>
                               </td>
                               <td className={cellClassName}>
@@ -1093,6 +1101,18 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
                       <DetailLine
                         label="월요금"
                         value={formatWon(ratePlanDetailItem.monthlyFee)}
+                      />
+                      <DetailLine
+                        label="음성통화"
+                        value={formatAllowanceValue(ratePlanDetailItem.voiceCallMinutes, "분")}
+                      />
+                      <DetailLine
+                        label="영상통화"
+                        value={formatAllowanceValue(ratePlanDetailItem.videoCallMinutes, "분")}
+                      />
+                      <DetailLine
+                        label="데이터"
+                        value={formatAllowanceValue(ratePlanDetailItem.dataAllowanceGb, "GB")}
                       />
                       <DetailLine
                         label="최근 사용"

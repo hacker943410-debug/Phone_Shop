@@ -14,8 +14,24 @@ const carriers: SalesCarrierRecord[] = [
     name: "SKT",
     code: "SKT",
     ratePlans: [
-      { id: "rate-skt-premium", name: "5GX Premium", monthlyFee: 109000, usageCount: 5 },
-      { id: "rate-skt-basic", name: "5GX Basic", monthlyFee: 89000, usageCount: 3 },
+      {
+        id: "rate-skt-premium",
+        name: "5GX Premium",
+        monthlyFee: 109000,
+        voiceCallMinutes: 999999,
+        videoCallMinutes: 300,
+        dataAllowanceGb: 250,
+        usageCount: 5,
+      },
+      {
+        id: "rate-skt-basic",
+        name: "5GX Basic",
+        monthlyFee: 89000,
+        voiceCallMinutes: 600,
+        videoCallMinutes: 100,
+        dataAllowanceGb: 50,
+        usageCount: 3,
+      },
     ],
     addOnServices: [
       { id: "svc-shared-vm", name: "공통 / V컬러링", monthlyFee: 3300, scope: "shared", usageCount: 4 },
@@ -26,7 +42,17 @@ const carriers: SalesCarrierRecord[] = [
     id: "carrier-kt",
     name: "KT",
     code: "KT",
-    ratePlans: [{ id: "rate-kt-5g", name: "5G 초이스", monthlyFee: 90000, usageCount: 2 }],
+    ratePlans: [
+      {
+        id: "rate-kt-5g",
+        name: "5G 초이스",
+        monthlyFee: 90000,
+        voiceCallMinutes: 999999,
+        videoCallMinutes: 300,
+        dataAllowanceGb: 110,
+        usageCount: 2,
+      },
+    ],
     addOnServices: [],
   },
 ];

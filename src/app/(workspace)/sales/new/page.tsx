@@ -52,26 +52,25 @@ export default async function NewSalePage({
       />
 
       <section className="space-y-6">
-        <Panel
-          title="등록 입력"
-        >
+        <Panel title="등록 입력">
           <SalesEntryForm
+            currentUserId={pageData.currentUserId}
             currentUserName={pageData.currentUserName}
             defaultSaleDate={pageData.defaultSaleDate}
             customers={pageData.customers}
             carriers={pageData.carriers}
             availableInventory={pageData.availableInventory}
             discountPolicies={pageData.discountPolicies}
-            rebatePolicies={pageData.rebatePolicies}
             saleProfitPolicies={pageData.saleProfitPolicies}
+            staffCommissionPolicies={pageData.staffCommissionPolicies}
             initialCustomerId={customerId}
           />
         </Panel>
 
         <SalesSupportPanel
           carriers={pageData.carriers}
-          rebatePolicies={pageData.rebatePolicies}
           saleProfitPolicies={pageData.saleProfitPolicies}
+          staffCommissionPolicies={pageData.staffCommissionPolicies}
           discountPolicies={pageData.discountPolicies}
           availableInventory={pageData.availableInventory}
         />

@@ -11,7 +11,6 @@ import {
   type ActivationCountUnit as ActivationCountUnitValue,
   type ActivationMonthCountMode as ActivationMonthCountModeValue,
   type DiscountMethod as DiscountMethodValue,
-  type DiscountTarget as DiscountTargetValue,
   type RevenueCalculationMethod as RevenueCalculationMethodValue,
 } from "../../../prisma/generated/client/enums";
 import { requireRole } from "@/lib/auth/dal";
@@ -54,18 +53,6 @@ function readDiscountMethod(formData: FormData, key: string): DiscountMethodValu
   switch (value) {
     case DiscountMethod.PERCENTAGE:
     case DiscountMethod.FIXED_AMOUNT:
-      return value;
-    default:
-      return null;
-  }
-}
-
-function readDiscountTarget(formData: FormData, key: string): DiscountTargetValue | null {
-  const value = readText(formData, key);
-
-  switch (value) {
-    case DiscountTarget.CARRIER:
-    case DiscountTarget.DEVICE:
       return value;
     default:
       return null;
@@ -125,83 +112,10 @@ function revalidatePolicyViews() {
   revalidatePath("/reports/summary");
 }
 
-export async function upsertRebatePolicyAction(formData: FormData) {
-  await requireRole("ADMIN");
-
-  const id = readOptionalText(formData, "id");
-  const name = readText(formData, "name");
-  const carrierId = readText(formData, "carrierId");
-  const deviceModelId = readText(formData, "deviceModelId");
-  const startsAt = readRequiredDate(formData, "startsAt", "start");
-  const endsAt = readRequiredDate(formData, "endsAt", "end");
-  const defaultRebateAmount = readInt(formData, "defaultRebateAmount");
-  const memo = readOptionalText(formData, "memo");
-
-  if (
-    !name ||
-    !carrierId ||
-    !deviceModelId ||
-    !startsAt ||
-    !endsAt ||
-    defaultRebateAmount === null ||
-    endsAt < startsAt
-  ) {
-    return;
-  }
-
-  if (id) {
-    await prisma.rebatePolicy.update({
-      where: { id },
-      data: {
-        name,
-        carrierId,
-        deviceModelId,
-        startsAt,
-        endsAt,
-        defaultRebateAmount,
-        memo,
-      },
-    });
-  } else {
-    await prisma.rebatePolicy.create({
-      data: {
-        name,
-        carrierId,
-        deviceModelId,
-        startsAt,
-        endsAt,
-        defaultRebateAmount,
-        memo,
-      },
-    });
-  }
-
-  revalidatePolicyViews();
-}
-
-export async function toggleRebatePolicyActiveAction(formData: FormData) {
-  await requireRole("ADMIN");
-
-  const id = readText(formData, "id");
-  const nextActive = readText(formData, "nextActive") === "true";
-
-  if (!id) {
-    return;
-  }
-
-  await prisma.rebatePolicy.update({
-    where: { id },
-    data: { isActive: nextActive },
-  });
-
-  revalidatePolicyViews();
-}
-
 export async function upsertSaleProfitPolicyAction(formData: FormData) {
   await requireRole("ADMIN");
 
   const id = readOptionalText(formData, "id");
-  const name = readText(formData, "name");
   const carrierId = readText(formData, "carrierId");
   const startsAt = readRequiredDate(formData, "startsAt", "start");
   const endsAt = readRequiredDate(formData, "endsAt", "end");
@@ -214,7 +128,6 @@ export async function upsertSaleProfitPolicyAction(formData: FormData) {
       : rawCalculationValue;
 
   if (
-    !name ||
     !carrierId ||
     !startsAt ||
     !endsAt ||
@@ -225,30 +138,47 @@ export async function upsertSaleProfitPolicyAction(formData: FormData) {
     return;
   }
 
+  const carrier = await prisma.carrier.findUnique({
+    where: { id: carrierId },
+    select: { id: true, name: true },
+  });
+
+  if (!carrier) {
+    return;
+  }
+
+  const conflictingPolicy = await prisma.saleProfitPolicy.findFirst({
+    where: {
+      carrierId,
+      ...(id ? { id: { not: id } } : {}),
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (conflictingPolicy) {
+    return;
+  }
+
+  const data = {
+    name: carrier.name,
+    carrierId,
+    startsAt,
+    endsAt,
+    calculationMethod,
+    calculationValue,
+    memo,
+  };
+
   if (id) {
     await prisma.saleProfitPolicy.update({
       where: { id },
-      data: {
-        name,
-        carrierId,
-        startsAt,
-        endsAt,
-        calculationMethod,
-        calculationValue,
-        memo,
-      },
+      data,
     });
   } else {
     await prisma.saleProfitPolicy.create({
-      data: {
-        name,
-        carrierId,
-        startsAt,
-        endsAt,
-        calculationMethod,
-        calculationValue,
-        memo,
-      },
+      data,
     });
   }
 
@@ -273,14 +203,94 @@ export async function toggleSaleProfitPolicyActiveAction(formData: FormData) {
   revalidatePolicyViews();
 }
 
+export async function upsertStaffCommissionPolicyAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readOptionalText(formData, "id");
+  const staffId = readText(formData, "staffId");
+  const startsAt = readRequiredDate(formData, "startsAt", "start");
+  const endsAt = readRequiredDate(formData, "endsAt", "end");
+  const calculationMethod = readRevenueCalculationMethod(formData, "calculationMethod");
+  const rawCalculationValue = readInt(formData, "calculationValue");
+  const memo = readOptionalText(formData, "memo");
+  const calculationValue =
+    calculationMethod === RevenueCalculationMethod.NONE
+      ? rawCalculationValue ?? 0
+      : rawCalculationValue;
+
+  if (
+    !staffId ||
+    !startsAt ||
+    !endsAt ||
+    !calculationMethod ||
+    calculationValue === null ||
+    endsAt < startsAt
+  ) {
+    return;
+  }
+
+  const staff = await prisma.user.findUnique({
+    where: { id: staffId },
+    select: {
+      id: true,
+      displayName: true,
+      username: true,
+      isActive: true,
+    },
+  });
+
+  if (!staff) {
+    return;
+  }
+
+  const data = {
+    name: staff.displayName,
+    carrierId: null,
+    staffId: staff.id,
+    startsAt,
+    endsAt,
+    calculationMethod,
+    calculationValue,
+    memo,
+  };
+
+  if (id) {
+    await prisma.staffCommissionPolicy.update({
+      where: { id },
+      data,
+    });
+  } else {
+    await prisma.staffCommissionPolicy.create({
+      data,
+    });
+  }
+
+  revalidatePolicyViews();
+}
+
+export async function toggleStaffCommissionPolicyActiveAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+  const nextActive = readText(formData, "nextActive") === "true";
+
+  if (!id) {
+    return;
+  }
+
+  await prisma.staffCommissionPolicy.update({
+    where: { id },
+    data: { isActive: nextActive },
+  });
+
+  revalidatePolicyViews();
+}
+
 export async function upsertDiscountPolicyAction(formData: FormData) {
   await requireRole("ADMIN");
 
   const id = readOptionalText(formData, "id");
-  const name = readText(formData, "name");
-  const target = readDiscountTarget(formData, "target");
-  const carrierId = readOptionalText(formData, "carrierId");
-  const deviceModelId = readOptionalText(formData, "deviceModelId");
+  const deviceModelId = readText(formData, "deviceModelId");
   const startsAt = readRequiredDate(formData, "startsAt", "start");
   const endsAt = readRequiredDate(formData, "endsAt", "end");
   const discountMethod = readDiscountMethod(formData, "discountMethod");
@@ -288,8 +298,7 @@ export async function upsertDiscountPolicyAction(formData: FormData) {
   const memo = readOptionalText(formData, "memo");
 
   if (
-    !name ||
-    !target ||
+    !deviceModelId ||
     !startsAt ||
     !endsAt ||
     !discountMethod ||
@@ -299,42 +308,35 @@ export async function upsertDiscountPolicyAction(formData: FormData) {
     return;
   }
 
-  if (target === DiscountTarget.CARRIER && !carrierId) {
+  const deviceModel = await prisma.deviceModel.findUnique({
+    where: { id: deviceModelId },
+    select: { id: true, name: true },
+  });
+
+  if (!deviceModel) {
     return;
   }
 
-  if (target === DiscountTarget.DEVICE && !deviceModelId) {
-    return;
-  }
+  const data = {
+    name: deviceModel.name,
+    target: DiscountTarget.DEVICE,
+    carrierId: null,
+    deviceModelId: deviceModel.id,
+    startsAt,
+    endsAt,
+    discountMethod,
+    discountValue,
+    memo,
+  };
 
   if (id) {
     await prisma.discountPolicy.update({
       where: { id },
-      data: {
-        name,
-        target,
-        carrierId,
-        deviceModelId,
-        startsAt,
-        endsAt,
-        discountMethod,
-        discountValue,
-        memo,
-      },
+      data,
     });
   } else {
     await prisma.discountPolicy.create({
-      data: {
-        name,
-        target,
-        carrierId,
-        deviceModelId,
-        startsAt,
-        endsAt,
-        discountMethod,
-        discountValue,
-        memo,
-      },
+      data,
     });
   }
 
@@ -384,6 +386,20 @@ export async function upsertCarrierActivationRuleAction(formData: FormData) {
     return;
   }
 
+  const conflictingRule = await prisma.carrierActivationRule.findFirst({
+    where: {
+      carrierId,
+      ...(id ? { id: { not: id } } : {}),
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (conflictingRule) {
+    return;
+  }
+
   if (id) {
     await prisma.carrierActivationRule.update({
       where: { id },
@@ -396,15 +412,8 @@ export async function upsertCarrierActivationRuleAction(formData: FormData) {
       },
     });
   } else {
-    await prisma.carrierActivationRule.upsert({
-      where: { carrierId },
-      update: {
-        countUnit,
-        countValue,
-        monthCountMode,
-        memo,
-      },
-      create: {
+    await prisma.carrierActivationRule.create({
+      data: {
         carrierId,
         countUnit,
         countValue,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { CustomerUpsertDialog } from "@/components/workspace/customer-upsert-dialog";
 import { SalesEntryForm } from "@/components/workspace/sales-entry-form";
@@ -9,8 +9,8 @@ import type {
   SalesCarrierRecord,
   SalesCustomerRecord,
   SalesDiscountPolicyRecord,
-  SalesRebatePolicyRecord,
   SalesSaleProfitPolicyRecord,
+  SalesStaffCommissionPolicyRecord,
 } from "@/components/workspace/sales-types";
 import { primaryButtonClassName } from "@/components/workspace/ui-classnames";
 import type { CustomerUpsertActionCustomer } from "@/lib/customer-upsert-action-state";
@@ -26,12 +26,13 @@ type LauncherView =
 interface SalesLauncherProps {
   availableInventory: SalesAvailableInventoryRecord[];
   carriers: SalesCarrierRecord[];
+  currentUserId: string;
   currentUserName: string;
   customers: SalesCustomerRecord[];
   defaultSaleDate: string;
   discountPolicies: SalesDiscountPolicyRecord[];
-  rebatePolicies: SalesRebatePolicyRecord[];
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
+  staffCommissionPolicies: SalesStaffCommissionPolicyRecord[];
 }
 
 function ExistingCustomerIllustration() {
@@ -123,12 +124,13 @@ function toSalesCustomerRecord(
 export function SalesLauncher({
   availableInventory,
   carriers,
+  currentUserId,
   currentUserName,
   customers,
   defaultSaleDate,
   discountPolicies,
-  rebatePolicies,
   saleProfitPolicies,
+  staffCommissionPolicies,
 }: SalesLauncherProps) {
   const [view, setView] = useState<LauncherView>(null);
   const [createdCustomers, setCreatedCustomers] = useState<SalesCustomerRecord[]>(
@@ -142,19 +144,6 @@ export function SalesLauncher({
     ...createdCustomers.filter((customer) => !serverCustomerIds.has(customer.id)),
     ...customers,
   ];
-
-  useEffect(() => {
-    if (!view) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [view]);
 
   function closeLauncher() {
     setView(null);
@@ -222,12 +211,13 @@ export function SalesLauncher({
           <SalesEntryForm
             availableInventory={availableInventory}
             carriers={carriers}
+            currentUserId={currentUserId}
             currentUserName={currentUserName}
             customers={salesCustomers}
             defaultSaleDate={defaultSaleDate}
             discountPolicies={discountPolicies}
-            rebatePolicies={rebatePolicies}
             saleProfitPolicies={saleProfitPolicies}
+            staffCommissionPolicies={staffCommissionPolicies}
           />
         </WorkspaceModalShell>
       ) : null}
@@ -253,12 +243,13 @@ export function SalesLauncher({
             key={seedCustomerId ?? "new-sale"}
             availableInventory={availableInventory}
             carriers={carriers}
+            currentUserId={currentUserId}
             currentUserName={currentUserName}
             customers={salesCustomers}
             defaultSaleDate={defaultSaleDate}
             discountPolicies={discountPolicies}
-            rebatePolicies={rebatePolicies}
             saleProfitPolicies={saleProfitPolicies}
+            staffCommissionPolicies={staffCommissionPolicies}
             initialCustomerId={seedCustomerId}
           />
         </WorkspaceModalShell>

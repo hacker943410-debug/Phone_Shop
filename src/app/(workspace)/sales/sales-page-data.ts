@@ -32,6 +32,7 @@ function readPageNumber(value: string | string[] | undefined) {
 
 function isNoticeValue(value: string): value is SalesNotice {
   return (
+    value === "sale-created" ||
     value === "invalid-sale-form" ||
     value === "sale-customer-not-found" ||
     value === "sale-inventory-unavailable" ||
@@ -78,8 +79,8 @@ export async function getSalesCommonPageData() {
     sharedServices,
     activationRules,
     completedSales,
-    rebatePolicies,
     saleProfitPolicies,
+    staffCommissionPolicies,
     discountPolicies,
     availableInventory,
   ] = await Promise.all([
@@ -117,6 +118,9 @@ export async function getSalesCommonPageData() {
             id: true,
             name: true,
             monthlyFee: true,
+            voiceCallMinutes: true,
+            videoCallMinutes: true,
+            dataAllowanceGb: true,
           },
         },
         services: {
@@ -169,14 +173,6 @@ export async function getSalesCommonPageData() {
         },
       },
     }),
-    prisma.rebatePolicy.findMany({
-      where: { isActive: true },
-      orderBy: [{ startsAt: "desc" }, { name: "asc" }],
-      include: {
-        carrier: { select: { name: true } },
-        deviceModel: { select: { name: true } },
-      },
-    }),
     prisma.saleProfitPolicy.findMany({
       where: { isActive: true },
       orderBy: [{ startsAt: "desc" }, { name: "asc" }],
@@ -184,12 +180,25 @@ export async function getSalesCommonPageData() {
         carrier: { select: { name: true } },
       },
     }),
-    prisma.discountPolicy.findMany({
-      where: { isActive: true },
+    prisma.staffCommissionPolicy.findMany({
+      where: {
+        isActive: true,
+        staffId: { not: null },
+      },
       orderBy: [{ startsAt: "desc" }, { name: "asc" }],
       include: {
-        carrier: { select: { name: true } },
-        deviceModel: { select: { name: true } },
+        staff: { select: { displayName: true, username: true } },
+      },
+    }),
+    prisma.discountPolicy.findMany({
+      where: {
+        isActive: true,
+        target: "DEVICE",
+        deviceModelId: { not: null },
+      },
+      orderBy: [{ startsAt: "desc" }, { name: "asc" }],
+      include: {
+        deviceModel: { select: { name: true, manufacturer: true } },
       },
     }),
     prisma.inventoryItem.findMany({
@@ -264,6 +273,7 @@ export async function getSalesCommonPageData() {
   }
 
   return {
+    currentUserId: currentUser.id,
     currentUserName: currentUser.displayName,
     defaultSaleDate: formatKstDate(new Date()),
     customers: customers.map((customer) => {
@@ -330,6 +340,9 @@ export async function getSalesCommonPageData() {
           id: ratePlan.id,
           name: ratePlan.name,
           monthlyFee: ratePlan.monthlyFee,
+          voiceCallMinutes: ratePlan.voiceCallMinutes,
+          videoCallMinutes: ratePlan.videoCallMinutes,
+          dataAllowanceGb: ratePlan.dataAllowanceGb,
           usageCount:
             ratePlanUsageCountMap.get(`${carrier.id}:${ratePlan.id}`) ?? 0,
         }))
@@ -363,17 +376,6 @@ export async function getSalesCommonPageData() {
           left.name.localeCompare(right.name, "ko"),
       ),
     })),
-    rebatePolicies: rebatePolicies.map((policy) => ({
-      id: policy.id,
-      name: policy.name,
-      carrierId: policy.carrierId,
-      carrierName: policy.carrier.name,
-      deviceModelId: policy.deviceModelId,
-      deviceModelName: policy.deviceModel.name,
-      startsAt: policy.startsAt.toISOString(),
-      endsAt: policy.endsAt.toISOString(),
-      defaultRebateAmount: policy.defaultRebateAmount,
-    })),
     saleProfitPolicies: saleProfitPolicies.map((policy) => ({
       id: policy.id,
       name: policy.name,
@@ -384,14 +386,23 @@ export async function getSalesCommonPageData() {
       calculationMethod: policy.calculationMethod,
       calculationValue: policy.calculationValue,
     })),
+    staffCommissionPolicies: staffCommissionPolicies.map((policy) => ({
+      id: policy.id,
+      name: policy.name,
+      staffId: policy.staffId ?? "",
+      staffName: policy.staff?.displayName ?? policy.name,
+      staffCode: policy.staff?.username ?? "",
+      startsAt: policy.startsAt.toISOString(),
+      endsAt: policy.endsAt.toISOString(),
+      calculationMethod: policy.calculationMethod,
+      calculationValue: policy.calculationValue,
+    })),
     discountPolicies: discountPolicies.map((policy) => ({
       id: policy.id,
       name: policy.name,
-      target: policy.target,
-      carrierId: policy.carrierId,
-      carrierName: policy.carrier?.name ?? null,
-      deviceModelId: policy.deviceModelId,
-      deviceModelName: policy.deviceModel?.name ?? null,
+      deviceModelId: policy.deviceModelId ?? "",
+      deviceModelName: policy.deviceModel?.name ?? policy.name,
+      manufacturer: policy.deviceModel?.manufacturer ?? null,
       startsAt: policy.startsAt.toISOString(),
       endsAt: policy.endsAt.toISOString(),
       discountMethod: policy.discountMethod,
@@ -573,13 +584,14 @@ export async function getSalesOverviewPageData(searchParams: SalesSearchParams) 
       discountValue: sale.discountValue,
       rebateAmount: sale.rebateAmount,
       policyRevenueAmount: sale.policyRevenueAmount,
+      profitDeductionAmount: sale.profitDeductionAmount,
       receivableAmount: sale.receivableAmount,
       receivableBalance: sale.receivable?.balanceAmount ?? 0,
       receivableStatus: sale.receivable?.status ?? null,
       selectedServices: sale.selectedServices.map((service) => service.nameSnapshot),
       appliedDiscountPolicyName: sale.appliedDiscountPolicyName,
-      appliedRebatePolicyName: sale.appliedRebatePolicyName,
       appliedSaleProfitPolicyName: sale.appliedSaleProfitPolicyName,
+      appliedStaffCommissionPolicyName: sale.appliedStaffCommissionPolicyName,
       canCancel: sale.status === "COMPLETED" && sale.payments.length === 0,
       hasPayments: sale.payments.length > 0,
     })),

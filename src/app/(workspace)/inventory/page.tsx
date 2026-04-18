@@ -56,12 +56,11 @@ export default async function InventoryPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    q?: string | string[];
+    manufacturer?: string | string[];
     status?: string | string[];
     carrierId?: string | string[];
     assigneeId?: string | string[];
     visibility?: string | string[];
-    itemId?: string | string[];
     page?: string | string[];
     notice?: string | string[];
   }>;
@@ -73,12 +72,11 @@ export default async function InventoryPage({
   }
 
   const rawSearchParams = await searchParams;
-  const q = readSearchParam(rawSearchParams.q);
+  const manufacturer = readSearchParam(rawSearchParams.manufacturer);
   const statusValue = readSearchParam(rawSearchParams.status);
   const carrierId = readSearchParam(rawSearchParams.carrierId);
   const assigneeId = readSearchParam(rawSearchParams.assigneeId);
   const visibilityValue = readSearchParam(rawSearchParams.visibility) || "all";
-  const itemId = readSearchParam(rawSearchParams.itemId);
   const requestedPage = readPageNumber(rawSearchParams.page);
   const noticeValue = readSearchParam(rawSearchParams.notice);
 
@@ -87,39 +85,11 @@ export default async function InventoryPage({
   const notice = isNoticeValue(noticeValue) ? noticeValue : null;
 
   const searchWhere = {
-    ...(q
+    ...(manufacturer
       ? {
-          OR: [
-            {
-              imei: {
-                contains: q,
-              },
-            },
-            {
-              color: {
-                contains: q,
-              },
-            },
-            {
-              capacity: {
-                contains: q,
-              },
-            },
-            {
-              carrier: {
-                name: {
-                  contains: q,
-                },
-              },
-            },
-            {
-              deviceModel: {
-                name: {
-                  contains: q,
-                },
-              },
-            },
-          ],
+          deviceModel: {
+            manufacturer,
+          },
         }
       : {}),
     ...(status !== "ALL"
@@ -276,6 +246,7 @@ export default async function InventoryPage({
       deviceModel: {
         select: {
           name: true,
+          manufacturer: true,
         },
       },
       assignee: {
@@ -286,10 +257,6 @@ export default async function InventoryPage({
       },
     },
   });
-
-  const selectedItemId = items.some((item) => item.id === itemId)
-    ? itemId
-    : (items[0]?.id ?? null);
 
   return (
     <InventoryOverview
@@ -315,6 +282,7 @@ export default async function InventoryPage({
         carrierName: item.carrier.name,
         deviceModelId: item.deviceModelId,
         deviceModelName: item.deviceModel.name,
+        deviceManufacturer: item.deviceModel.manufacturer,
         color: item.color,
         capacity: item.capacity,
         imei: item.imei,
@@ -327,9 +295,8 @@ export default async function InventoryPage({
         notes: item.notes,
         isHidden: item.isHidden,
       }))}
-      selectedItemId={selectedItemId}
       filters={{
-        q,
+        manufacturer,
         status,
         carrierId,
         assigneeId,

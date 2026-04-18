@@ -16,7 +16,10 @@ import {
   joinClassNames,
   secondaryButtonClassName,
 } from "@/components/workspace/ui-classnames";
-import { TonePill } from "@/components/workspace/workspace-primitives";
+import {
+  CarrierTonePill,
+  TonePill,
+} from "@/components/workspace/workspace-primitives";
 import type {
   DashboardFilters,
   DashboardMetric,
@@ -182,11 +185,9 @@ function DashboardHeader({ report }: { report: DashboardReportData }) {
   return (
     <header className="flex flex-col gap-1.5 xl:flex-row xl:items-start xl:justify-between">
       <div className="space-y-1.5">
-        <div className="flex flex-wrap items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-blue-700">
-          <span>Dashboard</span>
-          <span aria-hidden="true" className="h-px w-8 bg-blue-200" />
+        <div className="flex flex-wrap items-center gap-2 text-[0.72rem] font-semibold text-blue-700">
           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-800">
-            {report.periodLabel}
+            기준 기간 {report.periodLabel}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
@@ -449,7 +450,7 @@ function OperationsOverview({
                             마지막 판매 {row.lastSaleDate} / 가능일 {row.eligibleDate}
                           </p>
                         </div>
-                        <TonePill label={row.carrierName} tone="amber" />
+                        <CarrierTonePill label={row.carrierName} />
                       </div>
                       <p className="mt-2 text-[0.74rem] font-medium text-amber-700">
                         {row.ruleLabel}
@@ -474,7 +475,7 @@ function OperationsOverview({
                     <p className="text-sm font-semibold text-slate-950">
                       {row.customerName}
                     </p>
-                    <TonePill label={row.carrierName} tone="amber" />
+                    <CarrierTonePill label={row.carrierName} />
                   </div>
                   <p className="mt-1 text-[0.76rem] text-slate-500">
                     마지막 판매 {row.lastSaleDate} / 가능일 {row.eligibleDate}

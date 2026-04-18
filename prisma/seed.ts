@@ -1,4 +1,4 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 
@@ -40,6 +40,7 @@ async function main() {
     prisma.carrierActivationRule.deleteMany(),
     prisma.discountPolicy.deleteMany(),
     prisma.saleProfitPolicy.deleteMany(),
+    prisma.staffCommissionPolicy.deleteMany(),
     prisma.rebatePolicy.deleteMany(),
     prisma.addOnService.deleteMany(),
     prisma.ratePlan.deleteMany(),
@@ -189,6 +190,9 @@ async function main() {
         carrierId: "carrier-skt",
         name: "5GX 플래티넘",
         monthlyFee: 109000,
+        voiceCallMinutes: 999999,
+        videoCallMinutes: 300,
+        dataAllowanceGb: 250,
         description: "SKT 프리미엄 5G 요금제",
         isActive: true,
       },
@@ -197,6 +201,9 @@ async function main() {
         carrierId: "carrier-kt",
         name: "5G 초이스 베이직",
         monthlyFee: 90000,
+        voiceCallMinutes: 999999,
+        videoCallMinutes: 300,
+        dataAllowanceGb: 110,
         description: "KT 대표 5G 요금제",
         isActive: true,
       },
@@ -205,6 +212,9 @@ async function main() {
         carrierId: "carrier-lgu",
         name: "5G 프리미어 에센셜",
         monthlyFee: 95000,
+        voiceCallMinutes: 999999,
+        videoCallMinutes: 300,
+        dataAllowanceGb: 150,
         description: "LG U+ 고가형 요금제",
         isActive: true,
       },
@@ -240,38 +250,11 @@ async function main() {
     ],
   });
 
-  await prisma.rebatePolicy.createMany({
-    data: [
-      {
-        id: "rebate-kt-iphone16-20260411",
-        name: "KT iPhone 16 리베이트",
-        carrierId: "carrier-kt",
-        deviceModelId: "device-iphone-16",
-        startsAt: at("2026-04-11T00:00:00+09:00"),
-        endsAt: at("2026-04-11T23:59:59+09:00"),
-        defaultRebateAmount: 310000,
-        memo: "주말 특가 리베이트",
-        isActive: true,
-      },
-      {
-        id: "rebate-lgu-zflip6-20260401",
-        name: "LG U+ Z Flip 6 리베이트",
-        carrierId: "carrier-lgu",
-        deviceModelId: "device-z-flip-6",
-        startsAt: at("2026-04-01T00:00:00+09:00"),
-        endsAt: at("2026-04-30T23:59:59+09:00"),
-        defaultRebateAmount: 420000,
-        memo: "4월 월간 리베이트",
-        isActive: true,
-      },
-    ],
-  });
-
   await prisma.saleProfitPolicy.createMany({
     data: [
       {
         id: "profit-skt-default-202604",
-        name: "SKT 판매수익 기본 정책",
+        name: "SKT",
         carrierId: "carrier-skt",
         startsAt: at("2026-04-01T00:00:00+09:00"),
         endsAt: at("2026-04-30T23:59:59+09:00"),
@@ -282,7 +265,7 @@ async function main() {
       },
       {
         id: "profit-kt-fixed-202604",
-        name: "KT 판매수익 정액 정책",
+        name: "KT",
         carrierId: "carrier-kt",
         startsAt: at("2026-04-01T00:00:00+09:00"),
         endsAt: at("2026-04-30T23:59:59+09:00"),
@@ -293,7 +276,7 @@ async function main() {
       },
       {
         id: "profit-lgu-flip-202604",
-        name: "LG U+ Flip 6 고정 수익 정책",
+        name: "LG U+",
         carrierId: "carrier-lgu",
         startsAt: at("2026-04-01T00:00:00+09:00"),
         endsAt: at("2026-04-30T23:59:59+09:00"),
@@ -305,11 +288,49 @@ async function main() {
     ],
   });
 
+  await prisma.staffCommissionPolicy.createMany({
+    data: [
+      {
+        id: "commission-skt-basic-202604",
+        name: "김지후",
+        staffId: "user-kim-jh",
+        startsAt: at("2026-04-01T00:00:00+09:00"),
+        endsAt: at("2026-04-30T23:59:59+09:00"),
+        calculationMethod: RevenueCalculationMethod.PERCENTAGE,
+        calculationValue: 2,
+        memo: "판매가 기준 2% 차감",
+        isActive: true,
+      },
+      {
+        id: "commission-kt-basic-202604",
+        name: "박선영",
+        staffId: "user-park-sy",
+        startsAt: at("2026-04-01T00:00:00+09:00"),
+        endsAt: at("2026-04-30T23:59:59+09:00"),
+        calculationMethod: RevenueCalculationMethod.FIXED_AMOUNT,
+        calculationValue: 40000,
+        memo: "KT 기본 정액 수수료",
+        isActive: true,
+      },
+      {
+        id: "commission-lgu-basic-202604",
+        name: "이도윤",
+        staffId: "user-lee-dy",
+        startsAt: at("2026-04-01T00:00:00+09:00"),
+        endsAt: at("2026-04-30T23:59:59+09:00"),
+        calculationMethod: RevenueCalculationMethod.FIXED_AMOUNT,
+        calculationValue: 50000,
+        memo: "LG U+ 기본 정액 수수료",
+        isActive: true,
+      },
+    ],
+  });
+
   await prisma.discountPolicy.createMany({
     data: [
       {
         id: "discount-device-s25-202604",
-        name: "갤럭시 S25 단말기 할인",
+        name: "Galaxy S25",
         target: DiscountTarget.DEVICE,
         deviceModelId: "device-galaxy-s25",
         startsAt: at("2026-04-11T00:00:00+09:00"),
@@ -320,22 +341,9 @@ async function main() {
         isActive: true,
       },
       {
-        id: "discount-carrier-skt-202604",
-        name: "SKT 통신사 할인",
-        target: DiscountTarget.CARRIER,
-        carrierId: "carrier-skt",
-        startsAt: at("2026-04-01T00:00:00+09:00"),
-        endsAt: at("2026-04-30T23:59:59+09:00"),
-        discountMethod: DiscountMethod.PERCENTAGE,
-        discountValue: 5,
-        memo: "기본 통신사 할인",
-        isActive: true,
-      },
-      {
         id: "discount-kt-iphone16-202604",
-        name: "KT iPhone 16 단말기 할인",
+        name: "iPhone 16",
         target: DiscountTarget.DEVICE,
-        carrierId: "carrier-kt",
         deviceModelId: "device-iphone-16",
         startsAt: at("2026-04-01T00:00:00+09:00"),
         endsAt: at("2026-04-30T23:59:59+09:00"),
@@ -549,14 +557,16 @@ async function main() {
         rebateAmount: 310000,
         policyRevenueAmount: 70000,
         profitCalculationBaseAmount: 1288000,
-        profitDeductionAmount: 0,
-        totalProfitAmount: 380000,
-        appliedRebatePolicyId: "rebate-kt-iphone16-20260411",
+        profitDeductionAmount: 40000,
+        totalProfitAmount: 340000,
+        appliedRebatePolicyId: null,
         appliedSaleProfitPolicyId: "profit-kt-fixed-202604",
+        appliedStaffCommissionPolicyId: "commission-kt-basic-202604",
         appliedDiscountPolicyId: "discount-kt-iphone16-202604",
-        appliedRebatePolicyName: "KT iPhone 16 리베이트",
-        appliedSaleProfitPolicyName: "KT 판매수익 정액 정책",
-        appliedDiscountPolicyName: "KT iPhone 16 단말기 할인",
+        appliedRebatePolicyName: null,
+        appliedSaleProfitPolicyName: "KT",
+        appliedStaffCommissionPolicyName: "박선영",
+        appliedDiscountPolicyName: "iPhone 16",
       },
       {
         id: "sale-20260411-lee",
@@ -589,12 +599,14 @@ async function main() {
         rebateAmount: 250000,
         policyRevenueAmount: 0,
         profitCalculationBaseAmount: 1140000,
-        profitDeductionAmount: 0,
-        totalProfitAmount: 250000,
+        profitDeductionAmount: 22800,
+        totalProfitAmount: 227200,
         appliedSaleProfitPolicyId: "profit-skt-default-202604",
-        appliedDiscountPolicyId: "discount-carrier-skt-202604",
-        appliedSaleProfitPolicyName: "SKT 판매수익 기본 정책",
-        appliedDiscountPolicyName: "SKT 통신사 할인",
+        appliedStaffCommissionPolicyId: "commission-skt-basic-202604",
+        appliedDiscountPolicyId: "discount-device-s25-202604",
+        appliedSaleProfitPolicyName: "SKT",
+        appliedStaffCommissionPolicyName: "김지후",
+        appliedDiscountPolicyName: "Galaxy S25",
       },
       {
         id: "sale-20260409-jung",
@@ -623,12 +635,14 @@ async function main() {
         rebateAmount: 420000,
         policyRevenueAmount: 120000,
         profitCalculationBaseAmount: 1390000,
-        profitDeductionAmount: 0,
-        totalProfitAmount: 540000,
-        appliedRebatePolicyId: "rebate-lgu-zflip6-20260401",
+        profitDeductionAmount: 50000,
+        totalProfitAmount: 490000,
+        appliedRebatePolicyId: null,
         appliedSaleProfitPolicyId: "profit-lgu-flip-202604",
-        appliedRebatePolicyName: "LG U+ Z Flip 6 리베이트",
-        appliedSaleProfitPolicyName: "LG U+ Flip 6 고정 수익 정책",
+        appliedStaffCommissionPolicyId: "commission-lgu-basic-202604",
+        appliedRebatePolicyName: null,
+        appliedSaleProfitPolicyName: "LG U+",
+        appliedStaffCommissionPolicyName: "이도윤",
       },
       {
         id: "sale-20260408-oh",
@@ -661,10 +675,12 @@ async function main() {
         rebateAmount: 0,
         policyRevenueAmount: 0,
         profitCalculationBaseAmount: 800000,
-        profitDeductionAmount: 0,
+        profitDeductionAmount: 16000,
         totalProfitAmount: 0,
         appliedSaleProfitPolicyId: "profit-skt-default-202604",
-        appliedSaleProfitPolicyName: "SKT 판매수익 기본 정책",
+        appliedStaffCommissionPolicyId: "commission-skt-basic-202604",
+        appliedSaleProfitPolicyName: "SKT",
+        appliedStaffCommissionPolicyName: "김지후",
       },
       {
         id: "sale-20251202-choi",
@@ -852,3 +868,5 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+

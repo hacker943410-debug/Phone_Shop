@@ -1,5 +1,4 @@
 export type SalesDiscountMethod = "PERCENTAGE" | "FIXED_AMOUNT";
-export type SalesDiscountTarget = "CARRIER" | "DEVICE";
 export type SalesRevenueCalculationMethod =
   | "NONE"
   | "FIXED_AMOUNT"
@@ -8,29 +7,27 @@ export type SalesRevenueCalculationMethod =
 export interface DiscountPolicyCandidate {
   id: string;
   name: string;
-  carrierId: string | null;
-  deviceModelId: string | null;
-  target: SalesDiscountTarget;
+  deviceModelId: string;
   startsAt: string | Date;
   endsAt: string | Date;
   discountMethod: SalesDiscountMethod;
   discountValue: number;
 }
 
-export interface RebatePolicyCandidate {
-  id: string;
-  name: string;
-  carrierId: string;
-  deviceModelId: string;
-  startsAt: string | Date;
-  endsAt: string | Date;
-  defaultRebateAmount: number;
-}
-
 export interface SaleProfitPolicyCandidate {
   id: string;
   name: string;
   carrierId: string;
+  startsAt: string | Date;
+  endsAt: string | Date;
+  calculationMethod: SalesRevenueCalculationMethod;
+  calculationValue: number;
+}
+
+export interface StaffCommissionPolicyCandidate {
+  id: string;
+  name: string;
+  staffId: string;
   startsAt: string | Date;
   endsAt: string | Date;
   calculationMethod: SalesRevenueCalculationMethod;
@@ -45,6 +42,7 @@ export interface SalesCalculationInput {
   discountValue: number | null;
   rebateAmount: number;
   policyRevenueAmount: number;
+  profitDeductionAmount?: number;
   cashAmount: number;
   cardAmount: number;
   bankTransferAmount: number;
@@ -113,6 +111,7 @@ export function calculateSalesAmounts({
   discountValue,
   rebateAmount,
   policyRevenueAmount,
+  profitDeductionAmount = 0,
   cashAmount,
   cardAmount,
   bankTransferAmount,
@@ -135,55 +134,15 @@ export function calculateSalesAmounts({
     actualReceivedAmount,
     receivableAmount,
     profitCalculationBaseAmount: finalSalePrice,
-    totalProfitAmount: clampMoney(rebateAmount + policyRevenueAmount),
+    totalProfitAmount: clampMoney(
+      rebateAmount + policyRevenueAmount - profitDeductionAmount,
+    ),
   };
 }
 
 export function findMatchingDiscountPolicy(
   policies: DiscountPolicyCandidate[],
   saleDate: string | Date,
-  carrierId: string,
-  deviceModelId: string,
-) {
-  const timestamp = toTimestamp(saleDate);
-
-  const devicePolicy = policies.find((policy) => {
-    if (policy.target !== "DEVICE" || policy.deviceModelId !== deviceModelId) {
-      return false;
-    }
-
-    if (policy.carrierId && policy.carrierId !== carrierId) {
-      return false;
-    }
-
-    return (
-      toTimestamp(policy.startsAt) <= timestamp &&
-      toTimestamp(policy.endsAt) >= timestamp
-    );
-  });
-
-  if (devicePolicy) {
-    return devicePolicy;
-  }
-
-  return (
-    policies.find((policy) => {
-      if (policy.target !== "CARRIER" || policy.carrierId !== carrierId) {
-        return false;
-      }
-
-      return (
-        toTimestamp(policy.startsAt) <= timestamp &&
-        toTimestamp(policy.endsAt) >= timestamp
-      );
-    }) ?? null
-  );
-}
-
-export function findMatchingRebatePolicy(
-  policies: RebatePolicyCandidate[],
-  saleDate: string | Date,
-  carrierId: string,
   deviceModelId: string,
 ) {
   const timestamp = toTimestamp(saleDate);
@@ -191,7 +150,6 @@ export function findMatchingRebatePolicy(
   return (
     policies.find((policy) => {
       return (
-        policy.carrierId === carrierId &&
         policy.deviceModelId === deviceModelId &&
         toTimestamp(policy.startsAt) <= timestamp &&
         toTimestamp(policy.endsAt) >= timestamp
@@ -211,6 +169,24 @@ export function findMatchingSaleProfitPolicy(
     policies.find((policy) => {
       return (
         policy.carrierId === carrierId &&
+        toTimestamp(policy.startsAt) <= timestamp &&
+        toTimestamp(policy.endsAt) >= timestamp
+      );
+    }) ?? null
+  );
+}
+
+export function findMatchingStaffCommissionPolicy(
+  policies: StaffCommissionPolicyCandidate[],
+  saleDate: string | Date,
+  staffId: string,
+) {
+  const timestamp = toTimestamp(saleDate);
+
+  return (
+    policies.find((policy) => {
+      return (
+        policy.staffId === staffId &&
         toTimestamp(policy.startsAt) <= timestamp &&
         toTimestamp(policy.endsAt) >= timestamp
       );

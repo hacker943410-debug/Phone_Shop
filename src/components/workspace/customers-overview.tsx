@@ -12,6 +12,7 @@ import { QueryModalShell } from "@/components/workspace/query-modal-shell";
 import { secondaryButtonClassName } from "@/components/workspace/ui-classnames";
 import {
   ActionChip,
+  CarrierTonePill,
   MetricCard,
   PageIntro,
   Panel,
@@ -363,7 +364,11 @@ function CustomerSalesModal({
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <TonePill label={customer.currentCarrierName ?? "통신사 미정"} tone="teal" />
+          {customer.currentCarrierName ? (
+            <CarrierTonePill label={customer.currentCarrierName} fallbackTone="teal" />
+          ) : (
+            <TonePill label="통신사 미정" tone="teal" />
+          )}
           <TonePill label={`판매 ${customer.sales.length}건`} tone="amber" />
         </div>
 
@@ -412,7 +417,11 @@ function CustomerReceivablesModal({
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <TonePill label={customer.currentCarrierName ?? "통신사 미정"} tone="teal" />
+          {customer.currentCarrierName ? (
+            <CarrierTonePill label={customer.currentCarrierName} fallbackTone="teal" />
+          ) : (
+            <TonePill label="통신사 미정" tone="teal" />
+          )}
           <TonePill label={`미수 ${customer.receivables.length}건`} tone="slate" />
         </div>
 
@@ -634,7 +643,14 @@ export function CustomersOverview({
                         </div>
                       </td>
                       <td className="border-y border-stone-200 px-3 py-2.5 align-middle text-slate-600">
-                        {customer.currentCarrierName ?? "미정"}
+                        {customer.currentCarrierName ? (
+                          <CarrierTonePill
+                            label={customer.currentCarrierName}
+                            fallbackTone="teal"
+                          />
+                        ) : (
+                          "미정"
+                        )}
                       </td>
                       <td className="border-y border-stone-200 px-3 py-2.5 align-middle text-slate-600">
                         {customer.salesCount}건

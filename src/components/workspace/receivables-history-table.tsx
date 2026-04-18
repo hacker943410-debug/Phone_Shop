@@ -246,9 +246,6 @@ export function ReceivablesHistoryTable({
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setActiveModal(null);
@@ -258,7 +255,6 @@ export function ReceivablesHistoryTable({
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [activeModal]);

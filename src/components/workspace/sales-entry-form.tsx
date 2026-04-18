@@ -11,8 +11,8 @@ import {
   calculatePolicyRevenueAmount,
   calculateSalesAmounts,
   findMatchingDiscountPolicy,
-  findMatchingRebatePolicy,
   findMatchingSaleProfitPolicy,
+  findMatchingStaffCommissionPolicy,
   parseSaleDateForPolicyMatch,
 } from "@/lib/sales-calculations";
 
@@ -22,8 +22,8 @@ import type {
   SalesCarrierRecord,
   SalesCustomerRecord,
   SalesDiscountPolicyRecord,
-  SalesRebatePolicyRecord,
   SalesSaleProfitPolicyRecord,
+  SalesStaffCommissionPolicyRecord,
 } from "./sales-types";
 import { SelectControl } from "./form-client-controls";
 import { SalesEntryBasicsStep } from "./sales-entry-basics-step";
@@ -66,14 +66,15 @@ const saleSteps = [
 ] as const;
 
 interface SalesEntryFormProps {
+  currentUserId: string;
   currentUserName: string;
   defaultSaleDate: string;
   customers: SalesCustomerRecord[];
   carriers: SalesCarrierRecord[];
   availableInventory: SalesAvailableInventoryRecord[];
   discountPolicies: SalesDiscountPolicyRecord[];
-  rebatePolicies: SalesRebatePolicyRecord[];
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
+  staffCommissionPolicies: SalesStaffCommissionPolicyRecord[];
   initialCustomerId?: string;
 }
 
@@ -294,14 +295,15 @@ function CreateSaleSubmitButton({ disabled }: { disabled: boolean }) {
 }
 
 export function SalesEntryForm({
+  currentUserId,
   currentUserName,
   defaultSaleDate,
   customers,
   carriers,
   availableInventory,
   discountPolicies,
-  rebatePolicies,
   saleProfitPolicies,
+  staffCommissionPolicies,
   initialCustomerId,
 }: SalesEntryFormProps) {
   const initialResolvedCustomerId = customers.some(
@@ -405,16 +407,6 @@ export function SalesEntryForm({
       ? findMatchingDiscountPolicy(
           discountPolicies,
           saleDateForPolicies,
-          selectedInventory.carrierId,
-          selectedInventory.deviceModelId,
-        )
-      : null;
-  const suggestedRebatePolicy =
-    selectedInventory && saleDateForPolicies
-      ? findMatchingRebatePolicy(
-          rebatePolicies,
-          saleDateForPolicies,
-          selectedInventory.carrierId,
           selectedInventory.deviceModelId,
         )
       : null;
@@ -426,6 +418,14 @@ export function SalesEntryForm({
           selectedInventory.carrierId,
         )
       : null;
+  const matchedStaffCommissionPolicy =
+    selectedInventory && saleDateForPolicies
+      ? findMatchingStaffCommissionPolicy(
+          staffCommissionPolicies,
+          saleDateForPolicies,
+          currentUserId,
+        )
+      : null;
 
   const effectiveDiscountMethod: DiscountMethodValue | null = discountApplied
     ? manualDiscountIsValidMethod
@@ -435,8 +435,7 @@ export function SalesEntryForm({
   const effectiveDiscountValue = discountApplied
     ? parsedManualDiscountValue ?? suggestedDiscountPolicy?.discountValue ?? null
     : null;
-  const effectiveRebateAmount =
-    parsedRebateAmount ?? suggestedRebatePolicy?.defaultRebateAmount ?? 0;
+  const effectiveRebateAmount = parsedRebateAmount ?? 0;
   const effectiveSubsidyAmount = parsedSubsidyAmount ?? 0;
   const effectiveCashAmount = parsedCashAmount ?? 0;
   const effectiveCardAmount = parsedCardAmount ?? 0;
@@ -450,6 +449,7 @@ export function SalesEntryForm({
     discountValue: effectiveDiscountValue,
     rebateAmount: effectiveRebateAmount,
     policyRevenueAmount: 0,
+    profitDeductionAmount: 0,
     cashAmount: effectiveCashAmount,
     cardAmount: effectiveCardAmount,
     bankTransferAmount: effectiveBankTransferAmount,
@@ -462,6 +462,13 @@ export function SalesEntryForm({
         matchedSaleProfitPolicy.calculationValue,
       )
     : 0;
+  const effectiveStaffCommissionAmount = matchedStaffCommissionPolicy
+    ? calculatePolicyRevenueAmount(
+        baseCalculation.finalSalePrice,
+        matchedStaffCommissionPolicy.calculationMethod,
+        matchedStaffCommissionPolicy.calculationValue,
+      )
+    : 0;
 
   const previewCalculation = calculateSalesAmounts({
     listPrice: parsedListPrice,
@@ -471,6 +478,7 @@ export function SalesEntryForm({
     discountValue: effectiveDiscountValue,
     rebateAmount: effectiveRebateAmount,
     policyRevenueAmount: effectivePolicyRevenueAmount,
+    profitDeductionAmount: effectiveStaffCommissionAmount,
     cashAmount: effectiveCashAmount,
     cardAmount: effectiveCardAmount,
     bankTransferAmount: effectiveBankTransferAmount,
@@ -584,6 +592,36 @@ export function SalesEntryForm({
       <input name="customerId" type="hidden" value={customerId} />
       <input name="inventoryItemId" type="hidden" value={inventoryItemId} />
       <input name="ratePlanId" type="hidden" value={effectiveRatePlanId} />
+      {currentStep !== 0 ? (
+        <input name="saleDate" type="hidden" value={saleDate} />
+      ) : null}
+      {currentStep !== 1 ? (
+        <>
+          <input name="listPrice" type="hidden" value={listPrice} />
+          <input
+            name="discountApplied"
+            type="hidden"
+            value={discountApplied ? "true" : "false"}
+          />
+          <input name="discountMethod" type="hidden" value={manualDiscountMethod} />
+          <input name="discountValue" type="hidden" value={manualDiscountValue} />
+          <input name="rebateAmount" type="hidden" value={rebateAmount} />
+          <input name="subsidyAmount" type="hidden" value={subsidyAmount} />
+          <input name="cashAmount" type="hidden" value={cashAmount} />
+          <input name="cardAmount" type="hidden" value={cardAmount} />
+          <input
+            name="bankTransferAmount"
+            type="hidden"
+            value={bankTransferAmount}
+          />
+          <input
+            name="cardInstallmentMonths"
+            type="hidden"
+            value={cardInstallmentMonths}
+          />
+          <input name="notes" type="hidden" value={notes} />
+        </>
+      ) : null}
       {effectiveSelectedAddOnServiceIds.map((serviceId) => (
         <input key={serviceId} name="addOnServiceIds" type="hidden" value={serviceId} />
       ))}
@@ -700,7 +738,7 @@ export function SalesEntryForm({
                   displayFormat="currency"
                   name="rebateAmount"
                   onValueChange={setRebateAmount}
-                  placeholder="정책 기본값 또는 0원"
+                  placeholder="직접 입력 또는 0원"
                   value={rebateAmount}
                 />
               </label>
@@ -998,8 +1036,9 @@ export function SalesEntryForm({
                   {formatWon(previewCalculation.totalProfitAmount)}
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
-                  리베이트 {formatWon(effectiveRebateAmount)} / 정책 수익{" "}
-                  {formatWon(effectivePolicyRevenueAmount)}
+                  리베이트 {formatWon(effectiveRebateAmount)} / 통신사 할인{" "}
+                  {formatWon(effectivePolicyRevenueAmount)} / 수수료 차감{" "}
+                  {formatWon(effectiveStaffCommissionAmount)}
                 </p>
               </div>
             </div>
@@ -1023,7 +1062,7 @@ export function SalesEntryForm({
             </h3>
             <div className="mt-4 space-y-3 text-sm text-slate-600">
               <div className="rounded-lg border border-white/70 bg-white px-4 py-3">
-                <p className="font-medium text-slate-900">할인 정책</p>
+                <p className="font-medium text-slate-900">단말기 할인 정책</p>
                 <p className="mt-1">
                   {suggestedDiscountPolicy
                     ? `${suggestedDiscountPolicy.name} / ${getDiscountLabel(
@@ -1034,17 +1073,7 @@ export function SalesEntryForm({
                 </p>
               </div>
               <div className="rounded-lg border border-white/70 bg-white px-4 py-3">
-                <p className="font-medium text-slate-900">리베이트 정책</p>
-                <p className="mt-1">
-                  {suggestedRebatePolicy
-                    ? `${suggestedRebatePolicy.name} / ${formatWon(
-                        suggestedRebatePolicy.defaultRebateAmount,
-                      )}`
-                    : "매칭 없음"}
-                </p>
-              </div>
-              <div className="rounded-lg border border-white/70 bg-white px-4 py-3">
-                <p className="font-medium text-slate-900">정책 수익</p>
+                <p className="font-medium text-slate-900">통신사 할인 정책</p>
                 <p className="mt-1">
                   {matchedSaleProfitPolicy
                     ? `${matchedSaleProfitPolicy.name} / ${
@@ -1053,6 +1082,24 @@ export function SalesEntryForm({
                           : matchedSaleProfitPolicy.calculationMethod ===
                               "FIXED_AMOUNT"
                             ? formatWon(matchedSaleProfitPolicy.calculationValue)
+                            : "없음"
+                      }`
+                    : "매칭 없음"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/70 bg-white px-4 py-3">
+                <p className="font-medium text-slate-900">직원 수수료 정책</p>
+                <p className="mt-1">
+                  {matchedStaffCommissionPolicy
+                    ? `${matchedStaffCommissionPolicy.name} / ${
+                        matchedStaffCommissionPolicy.calculationMethod ===
+                        "PERCENTAGE"
+                          ? `${matchedStaffCommissionPolicy.calculationValue}%`
+                          : matchedStaffCommissionPolicy.calculationMethod ===
+                              "FIXED_AMOUNT"
+                            ? formatWon(
+                                matchedStaffCommissionPolicy.calculationValue,
+                              )
                             : "없음"
                       }`
                     : "매칭 없음"}

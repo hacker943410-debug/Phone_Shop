@@ -43,7 +43,7 @@ const currentUser: AuthenticatedUser = {
 };
 
 describe("WorkspaceNav", () => {
-  it("renders quick actions and sidebar menu in the updated order", () => {
+  it("renders the sidebar menu in the updated order", () => {
     const { container } = render(
       <WorkspaceNav
         currentUser={currentUser}
@@ -56,12 +56,6 @@ describe("WorkspaceNav", () => {
     });
     const menuList = container.querySelector("ul");
 
-    expect(
-      within(sidebar).getByRole("link", { name: "판매 등록" }),
-    ).toHaveAttribute("href", "/sales/new");
-    expect(
-      within(sidebar).getByRole("link", { name: "재고 입고" }),
-    ).toHaveAttribute("href", "/inventory");
     expect(menuList).not.toBeNull();
     expect(
       within(menuList as HTMLUListElement)
@@ -76,6 +70,8 @@ describe("WorkspaceNav", () => {
       "/settings/base",
       "/settings/policies",
     ]);
+    expect(within(sidebar).queryByRole("link", { name: "판매 등록" })).toBeNull();
+    expect(within(sidebar).queryByRole("link", { name: "재고 입고" })).toBeNull();
   });
 
   it("renders only labels without descriptions or badges", () => {

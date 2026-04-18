@@ -2,29 +2,17 @@ import {
   calculatePolicyRevenueAmount,
   calculateSalesAmounts,
   findMatchingDiscountPolicy,
+  findMatchingStaffCommissionPolicy,
 } from "@/lib/sales-calculations";
 
 describe("sales calculations", () => {
-  it("prefers device discount policy over carrier policy", () => {
+  it("finds the matching device discount policy", () => {
     const matchedPolicy = findMatchingDiscountPolicy(
       [
         {
-          id: "carrier",
-          name: "통신사 할인",
-          carrierId: "carrier-skt",
-          deviceModelId: null,
-          target: "CARRIER",
-          startsAt: "2026-04-01T00:00:00+09:00",
-          endsAt: "2026-04-30T23:59:59+09:00",
-          discountMethod: "PERCENTAGE",
-          discountValue: 5,
-        },
-        {
           id: "device",
-          name: "단말 할인",
-          carrierId: null,
+          name: "Galaxy S25",
           deviceModelId: "device-s25",
-          target: "DEVICE",
           startsAt: "2026-04-01T00:00:00+09:00",
           endsAt: "2026-04-30T23:59:59+09:00",
           discountMethod: "PERCENTAGE",
@@ -32,7 +20,6 @@ describe("sales calculations", () => {
         },
       ],
       "2026-04-12T12:00:00+09:00",
-      "carrier-skt",
       "device-s25",
     );
 
@@ -93,5 +80,43 @@ describe("sales calculations", () => {
     expect(calculatePolicyRevenueAmount(1_000_000, "NONE", 5)).toBe(0);
     expect(calculatePolicyRevenueAmount(1_000_000, "PERCENTAGE", 0)).toBe(0);
     expect(calculatePolicyRevenueAmount(1_000_000, "PERCENTAGE", 5)).toBe(50_000);
+  });
+
+  it("deducts staff commission from total profit", () => {
+    expect(
+      calculateSalesAmounts({
+        listPrice: 1_000_000,
+        discountApplied: false,
+        discountMethod: null,
+        discountValue: null,
+        rebateAmount: 300_000,
+        policyRevenueAmount: 80_000,
+        profitDeductionAmount: 50_000,
+        cashAmount: 300_000,
+        cardAmount: 700_000,
+        bankTransferAmount: 0,
+      }).totalProfitAmount,
+    ).toBe(330_000);
+  });
+
+  it("finds the matching staff commission policy by staff and date", () => {
+    const matchedPolicy = findMatchingStaffCommissionPolicy(
+      [
+        {
+          id: "commission-kim",
+          name: "김지후",
+          staffId: "user-kim-jh",
+          startsAt: "2026-04-01T00:00:00+09:00",
+          endsAt: "2026-04-30T23:59:59+09:00",
+          calculationMethod: "FIXED_AMOUNT",
+          calculationValue: 40_000,
+        },
+      ],
+      "2026-04-12T12:00:00+09:00",
+      "user-kim-jh",
+    );
+
+    expect(matchedPolicy?.id).toBe("commission-kim");
+    expect(matchedPolicy?.calculationValue).toBe(40_000);
   });
 });

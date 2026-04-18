@@ -1,5 +1,4 @@
 export type DiscountMethodValue = "PERCENTAGE" | "FIXED_AMOUNT";
-export type DiscountTargetValue = "CARRIER" | "DEVICE";
 export type RevenueCalculationMethodValue =
   | "NONE"
   | "FIXED_AMOUNT"
@@ -9,6 +8,7 @@ export type ReceivableStatusValue = "UNPAID" | "PARTIALLY_PAID" | "PAID";
 export type SalesStatusFilterValue = "all" | SaleStatusValue;
 
 export type SalesNotice =
+  | "sale-created"
   | "invalid-sale-form"
   | "sale-customer-not-found"
   | "sale-inventory-unavailable"
@@ -27,6 +27,9 @@ export interface SalesCarrierRecord {
     id: string;
     name: string;
     monthlyFee: number;
+    voiceCallMinutes: number | null;
+    videoCallMinutes: number | null;
+    dataAllowanceGb: number | null;
     usageCount: number;
   }>;
   addOnServices: Array<{
@@ -78,18 +81,6 @@ export interface SalesMetrics {
   outstandingCount: number;
 }
 
-export interface SalesRebatePolicyRecord {
-  id: string;
-  name: string;
-  carrierId: string;
-  carrierName: string;
-  deviceModelId: string;
-  deviceModelName: string;
-  startsAt: string;
-  endsAt: string;
-  defaultRebateAmount: number;
-}
-
 export interface SalesSaleProfitPolicyRecord {
   id: string;
   name: string;
@@ -101,14 +92,24 @@ export interface SalesSaleProfitPolicyRecord {
   calculationValue: number;
 }
 
+export interface SalesStaffCommissionPolicyRecord {
+  id: string;
+  name: string;
+  staffId: string;
+  staffName: string;
+  staffCode: string;
+  startsAt: string;
+  endsAt: string;
+  calculationMethod: RevenueCalculationMethodValue;
+  calculationValue: number;
+}
+
 export interface SalesDiscountPolicyRecord {
   id: string;
   name: string;
-  target: DiscountTargetValue;
-  carrierId: string | null;
-  carrierName: string | null;
-  deviceModelId: string | null;
-  deviceModelName: string | null;
+  deviceModelId: string;
+  deviceModelName: string;
+  manufacturer: string | null;
   startsAt: string;
   endsAt: string;
   discountMethod: DiscountMethodValue;
@@ -150,13 +151,14 @@ export interface SalesRecord {
   discountValue: number | null;
   rebateAmount: number;
   policyRevenueAmount: number;
+  profitDeductionAmount: number;
   receivableAmount: number;
   receivableBalance: number;
   receivableStatus: ReceivableStatusValue | null;
   selectedServices: string[];
   appliedDiscountPolicyName: string | null;
-  appliedRebatePolicyName: string | null;
   appliedSaleProfitPolicyName: string | null;
+  appliedStaffCommissionPolicyName: string | null;
   canCancel: boolean;
   hasPayments: boolean;
 }

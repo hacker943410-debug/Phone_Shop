@@ -200,7 +200,7 @@ function buildDashboardMetrics(summary: DashboardSummary): DashboardMetric[] {
       accent: "amber",
     },
     {
-      label: "선택 기간 정책 수익",
+      label: "선택 기간 통신사 할인",
       value: formatCurrency(summary.periodPolicyRevenueAmount),
       helper: `기간 수납 ${formatCurrency(summary.periodCollectedAmount)} 흐름 포함`,
       accent: "teal",
@@ -962,10 +962,10 @@ function buildCsvRows(report: DashboardReportData) {
     ["선택 기간 판매 금액", report.summary.periodSalesAmount],
     ["선택 기간 수납 금액", report.summary.periodCollectedAmount],
     ["선택 기간 리베이트", report.summary.periodRebateAmount],
-    ["선택 기간 정책 수익", report.summary.periodPolicyRevenueAmount],
+    ["선택 기간 통신사 할인", report.summary.periodPolicyRevenueAmount],
     ["선택 기간 총이익", report.summary.periodProfitAmount],
     [],
-    ["일자", "판매 건수", "판매 금액", "수납 금액", "리베이트", "정책 수익", "총이익"],
+    ["일자", "판매 건수", "판매 금액", "수납 금액", "리베이트", "통신사 할인", "총이익"],
     ...report.dailySummaries.map((row) => [
       row.date,
       row.salesCount,

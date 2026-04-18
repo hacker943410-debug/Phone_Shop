@@ -8,7 +8,7 @@ import {
 } from "@/components/workspace/ui-classnames";
 
 interface PageIntroProps {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -16,7 +16,6 @@ interface PageIntroProps {
 }
 
 export function PageIntro({
-  eyebrow,
   title,
   actions,
   className,
@@ -31,12 +30,6 @@ export function PageIntro({
       <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,rgba(146,64,14,0),rgba(180,83,9,0.52),rgba(217,119,6,0.36),rgba(146,64,14,0))]" />
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-6">
         <div className="min-w-0 space-y-2">
-          <div className="flex items-center gap-2.5">
-            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.34em] text-amber-700">
-              {eyebrow}
-            </p>
-            <span className="h-px w-12 bg-amber-200" aria-hidden="true" />
-          </div>
           <div className="space-y-1.5">
             <h1 className="text-[1.72rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[1.92rem] 2xl:text-[2.08rem]">
               {title}
@@ -190,7 +183,14 @@ export function Panel({
 
 interface TonePillProps {
   label: string;
-  tone?: "amber" | "teal" | "rose" | "slate";
+  tone?:
+    | "amber"
+    | "teal"
+    | "rose"
+    | "slate"
+    | "charcoal"
+    | "red"
+    | "pink";
 }
 
 const tonePillStyles = {
@@ -198,6 +198,9 @@ const tonePillStyles = {
   teal: "border border-blue-200 bg-blue-50 text-blue-900",
   rose: "border border-rose-200 bg-rose-50 text-rose-900",
   slate: "border border-stone-200 bg-stone-100 text-stone-700",
+  charcoal: "border border-slate-800 bg-slate-950 text-white",
+  red: "border border-red-200 bg-red-50 text-red-900",
+  pink: "border border-pink-200 bg-pink-50 text-pink-900",
 };
 
 export function TonePill({ label, tone = "slate" }: TonePillProps) {
@@ -208,6 +211,42 @@ export function TonePill({ label, tone = "slate" }: TonePillProps) {
       {label}
     </span>
   );
+}
+
+function normalizeCarrierLabel(label: string) {
+  return label.toUpperCase().replace(/[\s+_-]/g, "");
+}
+
+function getCarrierTone(label: string) {
+  const normalizedLabel = normalizeCarrierLabel(label);
+
+  if (normalizedLabel.startsWith("KT")) {
+    return "charcoal" as const;
+  }
+
+  if (normalizedLabel.startsWith("SKT") || normalizedLabel === "SK") {
+    return "red" as const;
+  }
+
+  if (
+    normalizedLabel.startsWith("LGU") ||
+    normalizedLabel.startsWith("LGUPLUS") ||
+    normalizedLabel.startsWith("LG")
+  ) {
+    return "pink" as const;
+  }
+
+  return "amber" as const;
+}
+
+export function CarrierTonePill({
+  label,
+  fallbackTone = "amber",
+}: {
+  label: string;
+  fallbackTone?: "amber" | "teal" | "rose" | "slate";
+}) {
+  return <TonePill label={label} tone={label ? getCarrierTone(label) : fallbackTone} />;
 }
 
 export {

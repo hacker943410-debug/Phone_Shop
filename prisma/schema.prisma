@@ -81,6 +81,7 @@ model User {
   inventoryItems InventoryItem[] @relation("InventoryAssignee")
   payments       Payment[]       @relation("PaymentStaff")
   sales          Sale[]          @relation("SalesStaff")
+  staffCommissionPolicies StaffCommissionPolicy[] @relation("StaffCommissionPolicyStaff")
 
   @@index([role, isActive])
 }
@@ -116,6 +117,7 @@ model Carrier {
   rebatePolicies     RebatePolicy[]
   sales              Sale[]
   saleProfitPolicies SaleProfitPolicy[]
+  staffCommissionPolicies StaffCommissionPolicy[]
   services           AddOnService[]
 
   @@index([isActive])
@@ -156,6 +158,9 @@ model RatePlan {
   carrierId   String
   name        String
   monthlyFee  Int
+  voiceCallMinutes Int?
+  videoCallMinutes Int?
+  dataAllowanceGb  Int?
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -270,6 +275,27 @@ model SaleProfitPolicy {
   @@index([carrierId, startsAt, endsAt, isActive])
 }
 
+model StaffCommissionPolicy {
+  id                String                   @id @default(cuid())
+  name              String
+  carrierId         String?
+  staffId           String?
+  startsAt          DateTime
+  endsAt            DateTime
+  calculationMethod RevenueCalculationMethod
+  calculationValue  Int                      @default(0)
+  memo              String?
+  isActive          Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  carrier           Carrier?                 @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  staff             User?                    @relation("StaffCommissionPolicyStaff", fields: [staffId], references: [id], onDelete: SetNull)
+  appliedSales      Sale[]                   @relation("AppliedStaffCommissionPolicy")
+
+  @@index([carrierId, startsAt, endsAt, isActive])
+  @@index([staffId, startsAt, endsAt, isActive])
+}
+
 model DiscountPolicy {
   id             String          @id @default(cuid())
   name           String
@@ -328,9 +354,11 @@ model Sale {
   totalProfitAmount           Int               @default(0)
   appliedRebatePolicyId       String?
   appliedSaleProfitPolicyId   String?
+  appliedStaffCommissionPolicyId String?
   appliedDiscountPolicyId     String?
   appliedRebatePolicyName     String?
   appliedSaleProfitPolicyName String?
+  appliedStaffCommissionPolicyName String?
   appliedDiscountPolicyName   String?
   notes                       String?
   canceledAt                  DateTime?
@@ -340,6 +368,7 @@ model Sale {
   appliedDiscountPolicy       DiscountPolicy?   @relation("AppliedDiscountPolicy", fields: [appliedDiscountPolicyId], references: [id], onDelete: SetNull)
   appliedRebatePolicy         RebatePolicy?     @relation("AppliedRebatePolicy", fields: [appliedRebatePolicyId], references: [id], onDelete: SetNull)
   appliedSaleProfitPolicy     SaleProfitPolicy? @relation("AppliedSaleProfitPolicy", fields: [appliedSaleProfitPolicyId], references: [id], onDelete: SetNull)
+  appliedStaffCommissionPolicy StaffCommissionPolicy? @relation("AppliedStaffCommissionPolicy", fields: [appliedStaffCommissionPolicyId], references: [id], onDelete: SetNull)
   carrier                     Carrier           @relation(fields: [carrierId], references: [id], onDelete: Restrict)
   customer                    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   deviceModel                 DeviceModel       @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)

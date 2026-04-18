@@ -135,7 +135,7 @@ export default async function SummaryReportPage({
           </article>
           <article className="rounded-lg border border-stone-200 bg-stone-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
-              리베이트 / 정책 수익
+              리베이트 / 통신사 할인
             </p>
             <p className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
               {formatWon(
@@ -144,7 +144,7 @@ export default async function SummaryReportPage({
               )}
             </p>
             <p className="mt-2 text-sm text-slate-600">
-              리베이트 {formatWon(report.summary.periodRebateAmount)} / 정책 수익{" "}
+              리베이트 {formatWon(report.summary.periodRebateAmount)} / 통신사 할인{" "}
               {formatWon(report.summary.periodPolicyRevenueAmount)}
             </p>
           </article>
@@ -185,7 +185,7 @@ export default async function SummaryReportPage({
                         <td className="py-4 pr-4 align-top">
                           <p className="font-semibold text-slate-950">{row.date}</p>
                           <p className="mt-1 text-xs text-slate-500">
-                            리베이트 {formatWon(row.rebateAmount)} / 정책 수익{" "}
+                            리베이트 {formatWon(row.rebateAmount)} / 통신사 할인{" "}
                             {formatWon(row.policyRevenueAmount)}
                           </p>
                         </td>

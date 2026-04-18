@@ -128,9 +128,10 @@ describe("receivables actions", () => {
         closedAt: null,
       },
     });
-    expect(revalidatePath).toHaveBeenCalledTimes(3);
+    expect(revalidatePath).toHaveBeenCalledTimes(4);
     expect(revalidatePath).toHaveBeenCalledWith("/receivables");
     expect(revalidatePath).toHaveBeenCalledWith("/customers");
     expect(revalidatePath).toHaveBeenCalledWith("/sales");
+    expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 });
