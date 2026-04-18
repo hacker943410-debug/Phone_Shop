@@ -14,8 +14,20 @@ export const metadata: Metadata = {
   title: "판매 등록",
 };
 
-export default async function NewSalePage() {
+function readSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+export default async function NewSalePage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    customerId?: string | string[];
+  }>;
+}) {
+  const params = await searchParams;
   const pageData = await getSalesCommonPageData();
+  const customerId = readSearchParam(params.customerId);
 
   if (!pageData) {
     return null;
@@ -25,8 +37,7 @@ export default async function NewSalePage() {
     <div className="space-y-5 p-4 sm:p-5 lg:p-6">
       <PageIntro
         eyebrow="Sales"
-        title="신규 판매 등록을 전용 작업 화면으로 분리했습니다."
-        description="목록 조회와 등록 입력을 분리해 판매 이력 검색 중 값을 잘못 바꾸는 흐름을 줄이고, 정책 계산과 재고 검증에 집중할 수 있게 구성했습니다."
+        title="판매 등록"
         actions={
           <>
             <ActionChip label={`담당 ${pageData.currentUserName}`} tone="dark" />
@@ -40,10 +51,9 @@ export default async function NewSalePage() {
         }
       />
 
-      <section className="grid gap-6 xl:grid-cols-[1.04fr_0.96fr]">
+      <section className="space-y-6">
         <Panel
-          title="판매 등록"
-          description="고객, 재고, 정책 매칭을 확인하면서 판매를 등록합니다. 미수금이 있으면 receivable도 함께 생성됩니다."
+          title="등록 입력"
         >
           <SalesEntryForm
             currentUserName={pageData.currentUserName}
@@ -54,6 +64,7 @@ export default async function NewSalePage() {
             discountPolicies={pageData.discountPolicies}
             rebatePolicies={pageData.rebatePolicies}
             saleProfitPolicies={pageData.saleProfitPolicies}
+            initialCustomerId={customerId}
           />
         </Panel>
 

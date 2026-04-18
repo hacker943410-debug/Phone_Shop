@@ -20,6 +20,8 @@ import {
 } from "@/components/workspace/ui-classnames";
 import { formatKstDate } from "@/lib/date-utils";
 import { formatWon } from "@/lib/formatters";
+import type { SalesUrlFilters } from "@/lib/sales-url-state";
+import { buildSalesHref } from "@/lib/sales-url-state";
 
 type DetailMode = "overview" | "cancel";
 
@@ -157,7 +159,7 @@ function ActionIconButton({
     <button
       aria-label={label}
       className={joinClassNames(
-        "relative z-10 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition duration-150",
+        "relative z-10 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border transition duration-150",
         tone === "blue"
           ? "border-blue-200 bg-blue-50 text-blue-700 hover:-translate-y-px hover:border-blue-300 hover:bg-blue-100"
           : "border-rose-200 bg-rose-50 text-rose-700 hover:-translate-y-px hover:border-rose-300 hover:bg-rose-100",
@@ -190,7 +192,7 @@ function ActionIconLink({
     <Link
       aria-label={label}
       className={joinClassNames(
-        "relative z-10 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border transition duration-150 hover:-translate-y-px",
+        "relative z-10 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border transition duration-150 hover:-translate-y-px",
         tone === "amber"
           ? "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
           : "border-teal-200 bg-teal-50 text-teal-700 hover:border-teal-300 hover:bg-teal-100",
@@ -239,7 +241,22 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
+function buildCustomerSearchHref(phone: string, returnTo: string) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("q", phone);
+  searchParams.set("returnTo", returnTo);
+  return `/customers?${searchParams.toString()}`;
+}
+
+export function SalesHistoryTable({
+  currentPage,
+  filters,
+  sales,
+}: {
+  currentPage: number;
+  filters: SalesUrlFilters;
+  sales: SalesRecord[];
+}) {
   const [activeSaleId, setActiveSaleId] = useState<string | null>(null);
   const [detailMode, setDetailMode] = useState<DetailMode>("overview");
   const cancelInputRef = useRef<HTMLInputElement | null>(null);
@@ -284,8 +301,8 @@ export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
 
   return (
     <>
-      <div className="overflow-x-auto rounded-[1.35rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] p-2 shadow-[0_24px_50px_-38px_rgba(15,23,42,0.22)]">
-        <table className="min-w-full border-separate border-spacing-y-2.5 text-left text-sm">
+      <div className="overflow-x-auto rounded-[1.25rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] p-1.5 shadow-[0_24px_50px_-38px_rgba(15,23,42,0.22)]">
+        <table className="min-w-full border-separate border-spacing-y-1.5 text-left text-sm">
           <thead className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
             <tr>
               <th className="px-3 pb-1 font-semibold">판매일</th>
@@ -298,10 +315,12 @@ export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
           </thead>
           <tbody>
             {sales.map((sale) => {
-              const customerHref = `/customers?q=${encodeURIComponent(
-                sale.customerPhone,
-              )}`;
-              const staffHref = `/sales?q=${encodeURIComponent(sale.staffName)}`;
+              const returnTo = buildSalesHref(filters, { page: currentPage });
+              const customerHref = buildCustomerSearchHref(sale.customerPhone, returnTo);
+              const staffHref = buildSalesHref(filters, {
+                page: 1,
+                q: sale.staffName,
+              });
               const saleSummary = `${sale.carrierName} ${sale.deviceModelName}${
                 sale.ratePlanName ? ` · ${sale.ratePlanName}` : ""
               }`;
@@ -311,7 +330,7 @@ export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
                   key={sale.id}
                   className="group rounded-[1rem] bg-white shadow-[0_14px_28px_-28px_rgba(15,23,42,0.3)] transition duration-150 hover:-translate-y-px hover:shadow-[0_20px_34px_-28px_rgba(37,99,235,0.24)]"
                 >
-                  <td className="rounded-l-[1rem] border-y border-l border-stone-200 px-3 py-3.5 align-middle text-slate-600">
+                  <td className="rounded-l-[0.95rem] border-y border-l border-stone-200 px-3 py-2.5 align-middle text-slate-600">
                     <div className="space-y-1">
                       <span className="whitespace-nowrap font-medium">
                         {formatKstDate(new Date(sale.saleDate))}
@@ -321,13 +340,13 @@ export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
                       </p>
                     </div>
                   </td>
-                  <td className="border-y border-stone-200 px-3 py-3.5 align-middle">
+                  <td className="border-y border-stone-200 px-3 py-2.5 align-middle">
                     <TonePill
                       label={getSaleStatusLabel(sale.status)}
                       tone={getSaleStatusTone(sale.status)}
                     />
                   </td>
-                  <td className="border-y border-stone-200 px-3 py-3.5 align-middle">
+                  <td className="border-y border-stone-200 px-3 py-2.5 align-middle">
                     <span
                       className="block max-w-[15rem] truncate font-semibold text-slate-950"
                       title={`${sale.customerName} · ${sale.customerPhone}`}
@@ -338,7 +357,7 @@ export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
                       {sale.customerPhone}
                     </span>
                   </td>
-                  <td className="border-y border-stone-200 px-3 py-3.5 align-middle">
+                  <td className="border-y border-stone-200 px-3 py-2.5 align-middle">
                     <span
                       className="block max-w-[21rem] truncate font-medium text-slate-700"
                       title={saleSummary}
@@ -346,7 +365,7 @@ export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
                       {saleSummary}
                     </span>
                   </td>
-                  <td className="border-y border-stone-200 px-3 py-3.5 align-middle">
+                  <td className="border-y border-stone-200 px-3 py-2.5 align-middle">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-slate-950">
                         {formatWon(sale.finalSalePrice)}
@@ -359,7 +378,7 @@ export function SalesHistoryTable({ sales }: { sales: SalesRecord[] }) {
                       />
                     </div>
                   </td>
-                  <td className="relative z-10 rounded-r-[1rem] border-y border-r border-stone-200 px-3 py-3.5 align-middle">
+                  <td className="relative z-10 rounded-r-[0.95rem] border-y border-r border-stone-200 px-3 py-2.5 align-middle">
                     <div className="flex items-center justify-end gap-2">
                       <ActionIconButton
                         label={`상세 보기 ${sale.customerName}`}

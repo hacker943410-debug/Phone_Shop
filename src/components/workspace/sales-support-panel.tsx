@@ -82,7 +82,6 @@ export function SalesSupportPanel({
   return (
     <Panel
       title="판매 지원 정보"
-      description="등록 전에 통신사 선택지, 적용 정책, 현재 판매 가능한 재고를 빠르게 확인합니다."
     >
       <div className="space-y-4">
         <section className="space-y-2">

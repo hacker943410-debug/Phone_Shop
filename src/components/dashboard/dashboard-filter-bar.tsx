@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import {
@@ -13,8 +13,7 @@ import {
   secondaryButtonClassName,
   selectControlClassName,
 } from "@/components/workspace/ui-classnames";
-
-type DashboardPreset = "today" | "7d" | "30d" | "month" | "custom";
+import type { DashboardPreset } from "@/lib/dashboard-reporting-types";
 
 interface DashboardFilters {
   preset: DashboardPreset;
@@ -33,9 +32,8 @@ const presetOptions: Array<{
   label: string;
 }> = [
   { value: "today", label: "오늘" },
-  { value: "7d", label: "최근 7일" },
-  { value: "30d", label: "최근 30일" },
-  { value: "month", label: "이번 달" },
+  { value: "week", label: "이번주" },
+  { value: "month", label: "이번달" },
 ];
 
 function buildDashboardQueryString(filters: DashboardFilters) {
@@ -59,13 +57,6 @@ export function DashboardFilterBar({
   const pathname = usePathname();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [dateFrom, setDateFrom] = useState(filters.dateFrom);
-  const [dateTo, setDateTo] = useState(filters.dateTo);
-
-  useEffect(() => {
-    setDateFrom(filters.dateFrom);
-    setDateTo(filters.dateTo);
-  }, [filters.dateFrom, filters.dateTo]);
 
   function pushSearch(search: string) {
     startTransition(() => {
@@ -86,6 +77,17 @@ export function DashboardFilterBar({
     pushPreset(preset, filters.storeId);
   }
 
+  function applyCustomPeriod() {
+    pushSearch(
+      `${pathname}?${buildDashboardQueryString({
+        preset: "custom",
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        storeId: filters.storeId,
+      })}`,
+    );
+  }
+
   function applyRange(nextDateFrom: string, nextDateTo: string) {
     if (!nextDateFrom || !nextDateTo) {
       return;
@@ -98,8 +100,6 @@ export function DashboardFilterBar({
       [normalizedFrom, normalizedTo] = [normalizedTo, normalizedFrom];
     }
 
-    setDateFrom(normalizedFrom);
-    setDateTo(normalizedTo);
     pushSearch(
       `${pathname}?${buildDashboardQueryString({
         preset: "custom",
@@ -115,8 +115,8 @@ export function DashboardFilterBar({
       pushSearch(
         `${pathname}?${buildDashboardQueryString({
           preset: "custom",
-          dateFrom,
-          dateTo,
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
           storeId,
         })}`,
       );
@@ -127,12 +127,30 @@ export function DashboardFilterBar({
   }
 
   const selectedStoreLabel =
-    stores.find((store) => store.id === filters.storeId)?.name ?? "전체 매장";
+    stores.find((store) => store.id === filters.storeId)?.name ?? "전체";
 
   return (
-    <section className="rounded-[1.15rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(247,245,241,0.96)_100%)] px-4 py-2.5 shadow-[0_18px_36px_-34px_rgba(15,23,42,0.22)] sm:px-5">
-      <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap gap-2">
+    <section className="relative z-20 rounded-[1.15rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(247,245,241,0.96)_100%)] px-4 py-2 shadow-[0_18px_36px_-34px_rgba(15,23,42,0.22)] sm:px-4.5">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
+        <div className="grid gap-2 sm:grid-cols-[minmax(9rem,12rem)_auto] sm:items-end">
+          <label className="space-y-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <span>지점</span>
+            <SelectControl
+              aria-label="지점 선택"
+              className={selectControlClassName}
+              value={filters.storeId}
+              onValueChange={applyStore}
+            >
+              <option value="">전체</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </SelectControl>
+          </label>
+
+          <div className="flex flex-wrap gap-2">
           {presetOptions.map((preset) => {
             const active = filters.preset === preset.value;
 
@@ -151,33 +169,30 @@ export function DashboardFilterBar({
               </button>
             );
           })}
+            <button
+              type="button"
+              onClick={applyCustomPeriod}
+              className={joinClassNames(
+                `${secondaryButtonClassName} h-8.5 cursor-pointer px-3.5 text-[0.78rem] font-semibold`,
+                filters.preset === "custom" &&
+                  "!border-slate-950 !bg-slate-950 !text-white hover:!border-slate-900 hover:!bg-slate-900 hover:!text-white",
+              )}
+            >
+              기간선택
+            </button>
+          </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[36rem] xl:grid-cols-3">
-          <label className="space-y-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            <span>매장</span>
-            <SelectControl
-              aria-label="매장 선택"
-              className={selectControlClassName}
-              value={filters.storeId}
-              onValueChange={applyStore}
-            >
-              <option value="">전체</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </SelectControl>
-          </label>
-
+        <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[20rem] xl:grid-cols-2">
           <label className="space-y-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
             <span>시작일</span>
             <DateControl
               aria-label="시작일"
               className={dateControlClassName}
-              value={dateFrom}
-              onValueChange={(nextValue) => applyRange(nextValue, dateTo || nextValue)}
+              value={filters.dateFrom}
+              onValueChange={(nextValue) =>
+                applyRange(nextValue, filters.dateTo || nextValue)
+              }
             />
           </label>
 
@@ -186,14 +201,16 @@ export function DashboardFilterBar({
             <DateControl
               aria-label="종료일"
               className={dateControlClassName}
-              value={dateTo}
-              onValueChange={(nextValue) => applyRange(dateFrom || nextValue, nextValue)}
+              value={filters.dateTo}
+              onValueChange={(nextValue) =>
+                applyRange(filters.dateFrom || nextValue, nextValue)
+              }
             />
           </label>
         </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-3 text-[0.72rem] font-medium text-slate-500">
+      <div className="mt-1.5 flex items-center justify-between gap-3 text-[0.72rem] font-medium text-slate-500">
         <span>
           {selectedStoreLabel} / {filters.dateFrom} ~ {filters.dateTo}
         </span>

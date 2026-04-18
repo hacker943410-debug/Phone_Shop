@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 
 import { CustomersOverview } from "@/components/workspace/customers-overview";
+import { normalizeRedirectPath } from "@/lib/auth/access";
+import {
+  isCustomerModalView,
+  type CustomerModalView,
+} from "@/lib/customers-url-state";
 import { createPagination, readPageNumber } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 
@@ -32,6 +37,8 @@ export default async function CustomersPage({
     carrierId?: string | string[];
     receivable?: string | string[];
     customerId?: string | string[];
+    view?: string | string[];
+    returnTo?: string | string[];
     page?: string | string[];
     notice?: string | string[];
   }>;
@@ -41,12 +48,18 @@ export default async function CustomersPage({
   const carrierId = readSearchParam(rawSearchParams.carrierId);
   const receivableValue = readSearchParam(rawSearchParams.receivable) || "all";
   const customerId = readSearchParam(rawSearchParams.customerId);
+  const viewValue = readSearchParam(rawSearchParams.view);
+  const returnToValue = readSearchParam(rawSearchParams.returnTo);
   const requestedPage = readPageNumber(rawSearchParams.page);
   const noticeValue = readSearchParam(rawSearchParams.notice);
   const normalizedQuery = q.replace(/\D/g, "");
+  const returnTo = returnToValue ? normalizeRedirectPath(returnToValue) : null;
 
   const receivable = isReceivableFilter(receivableValue) ? receivableValue : "all";
   const notice = isNoticeValue(noticeValue) ? noticeValue : null;
+  const selectedView: CustomerModalView | null = isCustomerModalView(viewValue)
+    ? viewValue
+    : null;
 
   const where = {
     isHidden: false,
@@ -205,7 +218,7 @@ export default async function CustomersPage({
 
   const selectedCustomerId = customers.some((customer) => customer.id === customerId)
     ? customerId
-    : (customers[0]?.id ?? null);
+    : null;
 
   const selectedCustomer = selectedCustomerId
     ? await prisma.customer.findUnique({
@@ -332,6 +345,7 @@ export default async function CustomersPage({
         carrierId,
         receivable,
       }}
+      returnTo={returnTo}
       pagination={pagination}
       metrics={{
         totalCount,
@@ -341,6 +355,7 @@ export default async function CustomersPage({
         receivableBalance: receivableAggregate._sum.balanceAmount ?? 0,
       }}
       notice={notice}
+      selectedView={selectedView}
     />
   );
 }

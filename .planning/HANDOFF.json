@@ -1,68 +1,71 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-15T22:20:28.3476638+09:00",
+  "timestamp": "2026-04-18T13:35:00+09:00",
   "phase": null,
-  "phase_name": "dashboard-sales-followup",
+  "phase_name": "workspace-console-refinement",
   "phase_dir": null,
-  "plan": 3,
-  "task": 3,
-  "total_tasks": 6,
+  "plan": 5,
+  "task": 5,
+  "total_tasks": 5,
   "status": "paused",
   "completed_tasks": [
     {
       "id": 1,
-      "name": "Dashboard and global control redesign",
+      "name": "Workspace-wide console layout and density pass",
       "status": "done"
     },
     {
       "id": 2,
-      "name": "Store dimension and activation-rule data model integration",
+      "name": "Sales and receivables workflow restructuring",
       "status": "done"
     },
     {
       "id": 3,
-      "name": "Sales management compact UI overhaul and interaction stabilization",
+      "name": "Dashboard/report layout and filter refinement",
+      "status": "done"
+    },
+    {
+      "id": 4,
+      "name": "Shared control polish (popover layering, heights, modal placement)",
+      "status": "done"
+    },
+    {
+      "id": 5,
+      "name": "Customer-management auto filters and modal detail flows",
       "status": "done"
     }
   ],
   "remaining_tasks": [
     {
-      "id": 4,
-      "name": "Connect the sales launcher 신규 고객 branch to customer registration and sales registration handoff",
-      "status": "not_started"
-    },
-    {
-      "id": 5,
-      "name": "Refine store/date drill-down across dashboard, reports, and sales list screens",
-      "status": "not_started"
-    },
-    {
       "id": 6,
-      "name": "Close remaining QA on custom controls and back-navigation interaction paths",
-      "status": "not_started"
+      "name": "Run broader UI QA on the webpack dev server and decide the next polish slice",
+      "status": "pending"
+    },
+    {
+      "id": 7,
+      "name": "Optionally clear the Turbopack Windows junction issue before rerunning Playwright through Turbopack",
+      "status": "pending"
     }
   ],
-  "blockers": [],
+  "blockers": [
+    "pnpm playwright test tests/e2e/home.spec.ts still fails when it depends on the local Turbopack dev server because Next 16 cannot recreate .next/dev/node_modules/better-sqlite3-* junctions on Windows (os error 145)."
+  ],
   "human_actions_pending": [],
   "decisions": [
     {
-      "decision": "Keep the dashboard chart-first and move verbose operational detail into modals.",
-      "rationale": "The user wanted visual emphasis over table-heavy scanning while preserving access to detailed records."
+      "decision": "Keep detail-heavy customer, sales, and receivable views in modal flows instead of persistent side panels.",
+      "rationale": "This preserves table width and keeps the main operational list visible."
     },
     {
-      "decision": "Add Store as a first-class data axis now.",
-      "rationale": "Future store-level reporting and sales filtering would otherwise require another schema rewrite."
+      "decision": "Use query-driven modal state for /customers.",
+      "rationale": "The page can keep server-rendered selected-customer data authoritative while staying refresh-safe."
     },
     {
-      "decision": "Drive activation eligibility from policy-managed carrier rules.",
-      "rationale": "Carrier waiting periods are operational policy, not static dashboard logic."
-    },
-    {
-      "decision": "Use auto-applying filters and compact rows for sales management.",
-      "rationale": "The old dense table and explicit apply buttons were visually heavy and slowed routine use."
+      "decision": "Use auto-apply filter bars instead of apply/reset buttons on operational list screens.",
+      "rationale": "It matches the faster console workflow the user requested."
     }
   ],
   "uncommitted_files": [],
-  "next_action": "Resume from /sales and implement the 신규 고객 launcher branch so customer registration can hand off directly into sales registration.",
-  "context_notes": "The product is now in a usable follow-up state. The biggest architectural changes for this round are already in place: store dimension, activation rules, custom controls, dashboard chart layout, and sales overview overhaul. The next session should stay narrow and finish flow completion plus QA rather than reopening large UI redesigns."
+  "next_action": "Run a broader cross-menu QA pass on the current webpack dev server, then choose between final UI polish and Turbopack environment cleanup.",
+  "context_notes": "The workspace layout pass, customer-management modal conversion, dashboard filter additions, and shared control layering/height fixes are in place and verified manually in the browser."
 }

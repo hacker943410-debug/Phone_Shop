@@ -3,6 +3,10 @@
 import { useActionState } from "react";
 
 import { loginAction, type LoginActionState } from "@/app/actions/auth";
+import {
+  formControlClassName,
+  primaryButtonClassName,
+} from "@/components/workspace/ui-classnames";
 
 interface LoginPanelProps {
   redirectTo: string;
@@ -20,7 +24,7 @@ export function LoginPanel({ redirectTo }: LoginPanelProps) {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.08),_transparent_26%),radial-gradient(circle_at_bottom_right,_rgba(217,119,6,0.08),_transparent_22%),linear-gradient(180deg,_#fafaf8_0%,_#f5f4f1_100%)] px-4 py-8">
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-blue-700">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-700">
             PhoneShop Access
           </p>
           <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.045em] text-slate-950 sm:text-5xl">
@@ -32,7 +36,7 @@ export function LoginPanel({ redirectTo }: LoginPanelProps) {
             재고, 고객, 판매, 미수금 메뉴로 바로 이어지는 구조입니다.
           </p>
           <div className="flex flex-wrap gap-3">
-            <span className="rounded-md border border-blue-700 bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white">
+            <span className="rounded-md border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs font-semibold text-stone-50">
               관리자 / 직원 권한 분리
             </span>
             <span className="rounded-md border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
@@ -65,7 +69,7 @@ export function LoginPanel({ redirectTo }: LoginPanelProps) {
                 </span>
                 <input
                   autoComplete="username"
-                  className="w-full rounded-lg border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  className={formControlClassName}
                   defaultValue={state.username}
                   name="username"
                   placeholder="admin"
@@ -78,7 +82,7 @@ export function LoginPanel({ redirectTo }: LoginPanelProps) {
                 </span>
                 <input
                   autoComplete="current-password"
-                  className="w-full rounded-lg border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  className={formControlClassName}
                   name="password"
                   placeholder="비밀번호"
                   type="password"
@@ -92,7 +96,7 @@ export function LoginPanel({ redirectTo }: LoginPanelProps) {
               ) : null}
 
               <button
-                className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-blue-700 bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:border-blue-300 disabled:bg-blue-300"
+                className={`${primaryButtonClassName} h-10 w-full px-4`}
                 disabled={isPending}
                 type="submit"
               >

@@ -15,6 +15,11 @@ export interface ReceivableCustomerOption {
   phone: string;
 }
 
+export interface ReceivableCarrierOption {
+  id: string;
+  name: string;
+}
+
 export interface ReceivablePaymentRecord {
   id: string;
   paymentDate: Date;
@@ -33,10 +38,14 @@ export interface ReceivableRecord {
   id: string;
   saleId: string;
   customerId: string;
+  carrierId: string;
   customerName: string;
   customerPhone: string;
   saleDate: Date;
+  carrierName: string;
+  deviceModelName: string;
   saleSummary: string;
+  storeName: string | null;
   staffName: string;
   originalAmount: number;
   paidAmount: number;
@@ -50,10 +59,9 @@ export interface ReceivableRecord {
 export interface ReceivablesFilters {
   q: string;
   customerId: string;
+  carrierId: string;
   saleId: string;
   status: "all" | ReceivableStatusValue;
-  dateFrom: string;
-  dateTo: string;
 }
 
 export interface ReceivablesMetrics {

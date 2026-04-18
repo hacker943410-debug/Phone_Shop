@@ -2,13 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 
-import { upsertCustomerAction } from "@/app/actions/customers";
-import {
-  FormField,
-  FormSelect,
-  FormTextArea,
-  SubmitButton,
-} from "@/components/workspace/admin-form-controls";
+import { CustomerUpsertDialog } from "@/components/workspace/customer-upsert-dialog";
 import { SalesEntryForm } from "@/components/workspace/sales-entry-form";
 import type {
   SalesAvailableInventoryRecord,
@@ -18,13 +12,16 @@ import type {
   SalesRebatePolicyRecord,
   SalesSaleProfitPolicyRecord,
 } from "@/components/workspace/sales-types";
-import {
-  joinClassNames,
-  primaryButtonClassName,
-  secondaryButtonClassName,
-} from "@/components/workspace/ui-classnames";
+import { primaryButtonClassName } from "@/components/workspace/ui-classnames";
+import type { CustomerUpsertActionCustomer } from "@/lib/customer-upsert-action-state";
+import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 
-type LauncherView = "chooser" | "existing" | "new" | null;
+type LauncherView =
+  | "chooser"
+  | "existing-sale"
+  | "new-customer"
+  | "new-sale"
+  | null;
 
 interface SalesLauncherProps {
   availableInventory: SalesAvailableInventoryRecord[];
@@ -37,20 +34,6 @@ interface SalesLauncherProps {
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
 }
 
-function CloseIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 20 20">
-      <path
-        d="m5.5 5.5 9 9m0-9-9 9"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
 function ExistingCustomerIllustration() {
   return (
     <svg aria-hidden="true" className="h-20 w-20" fill="none" viewBox="0 0 96 96">
@@ -58,15 +41,15 @@ function ExistingCustomerIllustration() {
       <path
         d="M29 41c0-10.493 8.507-19 19-19s19 8.507 19 19"
         stroke="#2563EB"
-        strokeWidth="6"
         strokeLinecap="round"
+        strokeWidth="6"
       />
       <circle cx="48" cy="44" r="12" fill="#BFDBFE" />
       <path
         d="M28 70c5.8-9.333 12.467-14 20-14s14.2 4.667 20 14"
         stroke="#1D4ED8"
-        strokeWidth="6"
         strokeLinecap="round"
+        strokeWidth="6"
       />
     </svg>
   );
@@ -96,14 +79,14 @@ function ActionChoiceCard({
   onClick,
   title,
 }: {
-  description: string;
+  description?: string;
   illustration: ReactNode;
   onClick: () => void;
   title: string;
 }) {
   return (
     <button
-      className="group flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-[1.6rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] px-6 py-6 text-center shadow-[0_24px_50px_-40px_rgba(15,23,42,0.32)] transition duration-200 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_28px_60px_-38px_rgba(37,99,235,0.28)]"
+      className="group flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-[1.6rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] px-6 py-6 text-center shadow-[0_24px_50px_-40px_rgba(15,23,42,0.32)] transition duration-200 hover:-translate-y-1 hover:border-amber-200 hover:shadow-[0_28px_60px_-38px_rgba(180,83,9,0.24)]"
       onClick={onClick}
       type="button"
     >
@@ -113,60 +96,28 @@ function ActionChoiceCard({
       <h4 className="mt-5 text-xl font-semibold tracking-[-0.04em] text-slate-950">
         {title}
       </h4>
-      <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+      {description ? (
+        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+      ) : null}
     </button>
   );
 }
 
-function ModalShell({
-  children,
-  onClose,
-  subtitle,
-  title,
-}: {
-  children: ReactNode;
-  onClose: () => void;
-  subtitle: string;
-  title: string;
-}) {
-  return (
-    <div
-      className="dashboard-dialog-backdrop fixed inset-0 z-[80] flex items-end justify-center bg-[rgba(15,23,42,0.42)] px-4 py-6 sm:items-center"
-      onClick={onClose}
-    >
-      <div
-        aria-modal="true"
-        className="dashboard-dialog-panel flex max-h-[min(88vh,60rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[1.7rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] shadow-[0_42px_90px_-34px_rgba(15,23,42,0.5)] backdrop-blur"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-stone-200/90 px-5 py-4 sm:px-6">
-          <div className="space-y-1.5">
-            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-blue-700">
-              {subtitle}
-            </p>
-            <h3 className="text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950">
-              {title}
-            </h3>
-          </div>
-          <button
-            aria-label="모달 닫기"
-            className={joinClassNames(
-              `${secondaryButtonClassName} h-9 w-9 px-0`,
-              "rounded-full border-stone-200 bg-white text-slate-700",
-            )}
-            onClick={onClose}
-            type="button"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
+function toSalesCustomerRecord(
+  customer: CustomerUpsertActionCustomer,
+): SalesCustomerRecord {
+  return {
+    id: customer.id,
+    name: customer.name,
+    phone: customer.phone,
+    currentCarrierId: customer.currentCarrierId,
+    currentCarrierName: customer.currentCarrierName,
+    retentionDisplay: null,
+    retentionRemainingDays: null,
+    latestSaleDeviceModelId: null,
+    latestSaleRatePlanId: null,
+    latestSaleAddOnServiceIds: [],
+  };
 }
 
 export function SalesLauncher({
@@ -180,6 +131,17 @@ export function SalesLauncher({
   saleProfitPolicies,
 }: SalesLauncherProps) {
   const [view, setView] = useState<LauncherView>(null);
+  const [createdCustomers, setCreatedCustomers] = useState<SalesCustomerRecord[]>(
+    [],
+  );
+  const [seedCustomerId, setSeedCustomerId] = useState<string | undefined>(
+    undefined,
+  );
+  const serverCustomerIds = new Set(customers.map((customer) => customer.id));
+  const salesCustomers = [
+    ...createdCustomers.filter((customer) => !serverCustomerIds.has(customer.id)),
+    ...customers,
+  ];
 
   useEffect(() => {
     if (!view) {
@@ -194,6 +156,32 @@ export function SalesLauncher({
     };
   }, [view]);
 
+  function closeLauncher() {
+    setView(null);
+    setSeedCustomerId(undefined);
+  }
+
+  function openExistingSale() {
+    setSeedCustomerId(undefined);
+    setView("existing-sale");
+  }
+
+  function openNewCustomerDialog() {
+    setSeedCustomerId(undefined);
+    setView("new-customer");
+  }
+
+  function handleCustomerCreated(customer: CustomerUpsertActionCustomer) {
+    const nextCustomer = toSalesCustomerRecord(customer);
+
+    setCreatedCustomers((current) => [
+      nextCustomer,
+      ...current.filter((item) => item.id !== customer.id),
+    ]);
+    setSeedCustomerId(customer.id);
+    setView("new-sale");
+  }
+
   return (
     <>
       <button
@@ -205,31 +193,29 @@ export function SalesLauncher({
       </button>
 
       {view === "chooser" ? (
-        <ModalShell
-          onClose={() => setView(null)}
+        <WorkspaceModalShell
+          onClose={closeLauncher}
           subtitle="Launch"
-          title="판매 등록 흐름을 선택합니다"
+          title="판매 등록 시작"
         >
           <div className="grid gap-4 lg:grid-cols-2">
             <ActionChoiceCard
-              description="이미 등록된 고객을 선택해 바로 판매 등록 흐름으로 들어갑니다."
               illustration={<ExistingCustomerIllustration />}
-              onClick={() => setView("existing")}
+              onClick={openExistingSale}
               title="기존 고객"
             />
             <ActionChoiceCard
-              description="먼저 고객을 등록하고, 이후 판매 연결 흐름은 다음 요청 단계에서 이어갑니다."
               illustration={<NewCustomerIllustration />}
-              onClick={() => setView("new")}
+              onClick={openNewCustomerDialog}
               title="신규 고객"
             />
           </div>
-        </ModalShell>
+        </WorkspaceModalShell>
       ) : null}
 
-      {view === "existing" ? (
-        <ModalShell
-          onClose={() => setView(null)}
+      {view === "existing-sale" ? (
+        <WorkspaceModalShell
+          onClose={closeLauncher}
           subtitle="Existing Customer"
           title="기존 고객 판매 등록"
         >
@@ -237,83 +223,45 @@ export function SalesLauncher({
             availableInventory={availableInventory}
             carriers={carriers}
             currentUserName={currentUserName}
-            customers={customers}
+            customers={salesCustomers}
             defaultSaleDate={defaultSaleDate}
             discountPolicies={discountPolicies}
             rebatePolicies={rebatePolicies}
             saleProfitPolicies={saleProfitPolicies}
           />
-        </ModalShell>
+        </WorkspaceModalShell>
       ) : null}
 
-      {view === "new" ? (
-        <ModalShell
-          onClose={() => setView(null)}
+      {view === "new-customer" ? (
+        <CustomerUpsertDialog
+          carriers={carriers}
+          onClose={closeLauncher}
+          onSuccess={handleCustomerCreated}
+          submitLabel="고객 저장 후 판매 등록"
           subtitle="New Customer"
           title="신규 고객 등록"
+        />
+      ) : null}
+
+      {view === "new-sale" ? (
+        <WorkspaceModalShell
+          onClose={closeLauncher}
+          subtitle="New Customer"
+          title="신규 고객 판매 등록"
         >
-          <div className="mx-auto max-w-3xl space-y-4">
-            <div className="rounded-[1.2rem] border border-blue-100 bg-blue-50/85 px-4 py-3 text-sm leading-6 text-slate-600">
-              고객 저장 후 현재 판매 화면 데이터가 다시 갱신됩니다. 저장 이후 판매 연결 흐름은
-              다음 요청 단계에서 이어서 정리합니다.
-            </div>
-            <form
-              action={upsertCustomerAction}
-              className="grid gap-4 rounded-[1.4rem] border border-stone-200 bg-white/90 p-5 shadow-[0_20px_44px_-34px_rgba(15,23,42,0.24)] md:grid-cols-2"
-            >
-              <FormField
-                autoComplete="off"
-                label="고객명"
-                name="name"
-                required
-              />
-              <FormField
-                autoComplete="off"
-                inputMode="tel"
-                label="연락처"
-                name="phone"
-                placeholder="010-1234-5678"
-                required
-              />
-              <FormSelect
-                label="현재 통신사"
-                name="currentCarrierId"
-              >
-                <option value="">미정</option>
-                {carriers.map((carrier) => (
-                  <option key={carrier.id} value={carrier.id}>
-                    {carrier.name}
-                  </option>
-                ))}
-              </FormSelect>
-              <FormField label="생년월일" name="birthDate" type="date" />
-              <FormField
-                autoComplete="off"
-                label="주소"
-                name="address"
-                placeholder="상세 주소 또는 메모"
-                wrapperClassName="md:col-span-2"
-              />
-              <FormTextArea
-                label="메모"
-                name="memo"
-                placeholder="상담 메모, 선호 기종, 후속 요청"
-                rows={4}
-                wrapperClassName="md:col-span-2"
-              />
-              <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
-                <button
-                  className={`${secondaryButtonClassName} h-10 px-4`}
-                  onClick={() => setView("chooser")}
-                  type="button"
-                >
-                  이전 선택으로
-                </button>
-                <SubmitButton label="고객 저장" />
-              </div>
-            </form>
-          </div>
-        </ModalShell>
+          <SalesEntryForm
+            key={seedCustomerId ?? "new-sale"}
+            availableInventory={availableInventory}
+            carriers={carriers}
+            currentUserName={currentUserName}
+            customers={salesCustomers}
+            defaultSaleDate={defaultSaleDate}
+            discountPolicies={discountPolicies}
+            rebatePolicies={rebatePolicies}
+            saleProfitPolicies={saleProfitPolicies}
+            initialCustomerId={seedCustomerId}
+          />
+        </WorkspaceModalShell>
       ) : null}
     </>
   );

@@ -4,149 +4,22 @@ import {
   isActivationEligible,
 } from "@/lib/activation-rules";
 import { formatKstDate, formatKstDateRange, parseKstDateInput } from "@/lib/date-utils";
+import {
+  dashboardPresets,
+  type DashboardActivationEligibleCustomer,
+  type DashboardAttentionItem,
+  type DashboardCarrierTrendSeries,
+  type DashboardDailySummary,
+  type DashboardFilters,
+  type DashboardMetric,
+  type DashboardPreset,
+  type DashboardReportData,
+  type DashboardStaffSummary,
+  type DashboardStoreSummary,
+  type DashboardSummary,
+} from "@/lib/dashboard-reporting-types";
 import { prisma } from "@/lib/prisma";
-
-export const dashboardPresets = ["today", "7d", "30d", "month", "custom"] as const;
-
-export type DashboardPreset = (typeof dashboardPresets)[number];
-
-type DashboardTone = "amber" | "teal" | "rose" | "slate";
-type DashboardAccent = "amber" | "teal" | "slate";
-type ReceivableStatusValue = "UNPAID" | "PARTIALLY_PAID" | "PAID";
-
-export interface DashboardFilters {
-  preset: DashboardPreset;
-  dateFrom: string;
-  dateTo: string;
-  storeId: string;
-}
-
-export interface DashboardMetric {
-  label: string;
-  value: string;
-  helper: string;
-  accent: DashboardAccent;
-}
-
-export interface DashboardAttentionItem {
-  title: string;
-  detail: string;
-  badge: string;
-  tone: DashboardTone;
-}
-
-export interface DashboardStaffSummary {
-  staffId: string;
-  staffName: string;
-  salesCount: number;
-  salesAmount: number;
-  collectedAmount: number;
-  additionalPaymentAmount: number;
-  profitAmount: number;
-}
-
-export interface DashboardStoreSummary {
-  storeId: string;
-  storeName: string;
-  salesCount: number;
-  salesAmount: number;
-  collectedAmount: number;
-  additionalPaymentAmount: number;
-  profitAmount: number;
-}
-
-export interface DashboardStoreOption {
-  id: string;
-  name: string;
-}
-
-export interface DashboardDailySummary {
-  date: string;
-  salesCount: number;
-  salesAmount: number;
-  collectedAmount: number;
-  rebateAmount: number;
-  policyRevenueAmount: number;
-  profitAmount: number;
-}
-
-export interface DashboardRecentSale {
-  id: string;
-  saleDate: string;
-  customerName: string;
-  carrierName: string;
-  deviceModelName: string;
-  staffName: string;
-  collectedAmount: number;
-  receivableAmount: number;
-  receivableStatus: ReceivableStatusValue | null;
-  profitAmount: number;
-}
-
-export interface DashboardReceivableSnapshot {
-  customerName: string;
-  carrierName: string;
-  deviceModelName: string;
-  balanceAmount: number;
-}
-
-export interface DashboardActivationEligibleCustomer {
-  customerId: string;
-  customerName: string;
-  carrierName: string;
-  lastSaleDate: string;
-  eligibleDate: string;
-  ruleLabel: string;
-}
-
-export interface DashboardCarrierTrendPoint {
-  date: string;
-  count: number;
-}
-
-export interface DashboardCarrierTrendSeries {
-  carrierName: string;
-  totalCount: number;
-  points: DashboardCarrierTrendPoint[];
-}
-
-export interface DashboardSummary {
-  todaySalesCount: number;
-  todayCanceledSalesCount: number;
-  todayInitialReceivedAmount: number;
-  todayAdditionalPaymentAmount: number;
-  todayCollectedAmount: number;
-  currentReceivableBalance: number;
-  currentReceivableCount: number;
-  partialReceivableCount: number;
-  activationEligibleCount: number;
-  periodSalesCount: number;
-  periodSalesAmount: number;
-  periodInitialReceivedAmount: number;
-  periodAdditionalPaymentAmount: number;
-  periodCollectedAmount: number;
-  periodReceivableCreatedAmount: number;
-  periodRebateAmount: number;
-  periodPolicyRevenueAmount: number;
-  periodProfitAmount: number;
-}
-
-export interface DashboardReportData {
-  filters: DashboardFilters;
-  periodLabel: string;
-  generatedAt: string;
-  availableStores: DashboardStoreOption[];
-  metrics: DashboardMetric[];
-  summary: DashboardSummary;
-  attentionItems: DashboardAttentionItem[];
-  receivableSnapshots: DashboardReceivableSnapshot[];
-  storeSummaries: DashboardStoreSummary[];
-  staffSummaries: DashboardStaffSummary[];
-  dailySummaries: DashboardDailySummary[];
-  recentSales: DashboardRecentSale[];
-  activationEligibleCustomers: DashboardActivationEligibleCustomer[];
-  carrierTrendSeries: DashboardCarrierTrendSeries[];
-}
+export * from "@/lib/dashboard-reporting-types";
 
 type DashboardRawSearchParams = {
   preset?: string | string[];
@@ -182,6 +55,7 @@ function resolvePresetRange(
   referenceDate: Date,
 ) {
   const today = formatKstDate(referenceDate);
+  const todayDate = parseKstDateInput(today, "start");
 
   switch (preset) {
     case "today":
@@ -189,16 +63,18 @@ function resolvePresetRange(
         dateFrom: today,
         dateTo: today,
       };
-    case "7d":
+    case "week": {
+      const weekStartDate = new Date(todayDate);
+      const weekday = new Date(`${today}T12:00:00+09:00`).getUTCDay();
+      const offset = weekday === 0 ? -6 : 1 - weekday;
+
+      weekStartDate.setUTCDate(weekStartDate.getUTCDate() + offset);
+
       return {
-        dateFrom: shiftKstDateInput(today, -6),
+        dateFrom: formatKstDate(weekStartDate),
         dateTo: today,
       };
-    case "30d":
-      return {
-        dateFrom: shiftKstDateInput(today, -29),
-        dateTo: today,
-      };
+    }
     case "month":
       return {
         dateFrom: `${today.slice(0, 8)}01`,
@@ -235,12 +111,10 @@ export function getDashboardPresetLabel(preset: DashboardPreset) {
   switch (preset) {
     case "today":
       return "오늘";
-    case "7d":
-      return "최근 7일";
-    case "30d":
-      return "최근 30일";
+    case "week":
+      return "이번주";
     case "month":
-      return "이번 달";
+      return "이번달";
     case "custom":
       return "직접 지정";
   }
@@ -256,7 +130,7 @@ export function resolveDashboardFilters(
   const storeIdValue = readFirst(rawSearchParams.storeId);
 
   if (isDateInput(dateFromValue) || isDateInput(dateToValue)) {
-    const fallbackRange = resolvePresetRange("7d", referenceDate);
+    const fallbackRange = resolvePresetRange("week", referenceDate);
     let dateFrom = isDateInput(dateFromValue)
       ? dateFromValue
       : (isDateInput(dateToValue) ? dateToValue : fallbackRange.dateFrom);
@@ -279,7 +153,7 @@ export function resolveDashboardFilters(
   const preset =
     isDashboardPreset(presetValue) && presetValue !== "custom"
       ? presetValue
-      : "7d";
+      : "week";
 
   return {
     preset,

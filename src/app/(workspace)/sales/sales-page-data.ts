@@ -3,6 +3,7 @@ import type {
   SalesNotice,
   SalesStatusFilterValue,
 } from "@/components/workspace/sales-types";
+import { getActivationEligibleDate } from "@/lib/activation-rules";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { formatKstDate, parseKstDateInput } from "@/lib/date-utils";
 import { prisma } from "@/lib/prisma";
@@ -47,6 +48,22 @@ function isSalesStatusFilterValue(value: string): value is SalesStatusFilterValu
   return value === "all" || value === "COMPLETED" || value === "CANCELED";
 }
 
+function formatRetentionDisplay(input: {
+  countUnit: "DAY" | "MONTH";
+  countValue: number;
+  monthCountMode: "INCLUDE_CURRENT_MONTH" | "EXCLUDE_CURRENT_MONTH" | null;
+  eligibleDate: Date;
+}) {
+  const durationLabel =
+    input.countUnit === "DAY"
+      ? `+${input.countValue}일`
+      : `+${input.countValue}개월${
+          input.monthCountMode === "EXCLUDE_CURRENT_MONTH" ? "(당월 제외)" : ""
+        }`;
+
+  return `${durationLabel} / ${formatKstDate(input.eligibleDate)}까지`;
+}
+
 export async function getSalesCommonPageData() {
   const currentUser = await getCurrentUser();
 
@@ -59,6 +76,8 @@ export async function getSalesCommonPageData() {
     stores,
     activeCarriers,
     sharedServices,
+    activationRules,
+    completedSales,
     rebatePolicies,
     saleProfitPolicies,
     discountPolicies,
@@ -71,6 +90,7 @@ export async function getSalesCommonPageData() {
         id: true,
         name: true,
         phone: true,
+        currentCarrierId: true,
         currentCarrier: {
           select: {
             name: true,
@@ -122,6 +142,33 @@ export async function getSalesCommonPageData() {
         monthlyFee: true,
       },
     }),
+    prisma.carrierActivationRule.findMany({
+      where: { isActive: true },
+      select: {
+        carrierId: true,
+        countUnit: true,
+        countValue: true,
+        monthCountMode: true,
+      },
+    }),
+    prisma.sale.findMany({
+      where: {
+        status: "COMPLETED",
+      },
+      select: {
+        customerId: true,
+        carrierId: true,
+        saleDate: true,
+        createdAt: true,
+        ratePlanId: true,
+        deviceModelId: true,
+        selectedServices: {
+          select: {
+            addOnServiceId: true,
+          },
+        },
+      },
+    }),
     prisma.rebatePolicy.findMany({
       where: { isActive: true },
       orderBy: [{ startsAt: "desc" }, { name: "asc" }],
@@ -156,39 +203,165 @@ export async function getSalesCommonPageData() {
       include: {
         carrier: { select: { name: true } },
         deviceModel: { select: { name: true } },
+        store: { select: { name: true } },
       },
     }),
   ]);
 
+  const ratePlanUsageCountMap = new Map<string, number>();
+  const addOnServiceUsageCountMap = new Map<string, number>();
+  const activationRuleMap = new Map(
+    activationRules.map((rule) => [rule.carrierId, rule]),
+  );
+  const latestCustomerCarrierSaleMap = new Map<
+    string,
+    {
+      saleDate: Date;
+      createdAt: Date;
+      deviceModelId: string;
+      ratePlanId: string | null;
+      selectedAddOnServiceIds: string[];
+    }
+  >();
+  const todayKst = parseKstDateInput(formatKstDate(new Date()), "start");
+
+  for (const sale of completedSales) {
+    const latestSaleKey = `${sale.customerId}:${sale.carrierId}`;
+    const currentLatestSale = latestCustomerCarrierSaleMap.get(latestSaleKey);
+
+    if (
+      !currentLatestSale ||
+      sale.saleDate > currentLatestSale.saleDate ||
+      (sale.saleDate.getTime() === currentLatestSale.saleDate.getTime() &&
+        sale.createdAt > currentLatestSale.createdAt)
+    ) {
+      latestCustomerCarrierSaleMap.set(latestSaleKey, {
+        saleDate: sale.saleDate,
+        createdAt: sale.createdAt,
+        deviceModelId: sale.deviceModelId,
+        ratePlanId: sale.ratePlanId,
+        selectedAddOnServiceIds: sale.selectedServices.map(
+          (service) => service.addOnServiceId,
+        ),
+      });
+    }
+
+    if (sale.ratePlanId) {
+      const ratePlanKey = `${sale.carrierId}:${sale.ratePlanId}`;
+      ratePlanUsageCountMap.set(
+        ratePlanKey,
+        (ratePlanUsageCountMap.get(ratePlanKey) ?? 0) + 1,
+      );
+    }
+
+    for (const service of sale.selectedServices) {
+      const serviceKey = `${sale.carrierId}:${service.addOnServiceId}`;
+      addOnServiceUsageCountMap.set(
+        serviceKey,
+        (addOnServiceUsageCountMap.get(serviceKey) ?? 0) + 1,
+      );
+    }
+  }
+
   return {
     currentUserName: currentUser.displayName,
     defaultSaleDate: formatKstDate(new Date()),
-    customers: customers.map((customer) => ({
-      id: customer.id,
-      name: customer.name,
-      phone: customer.phone,
-      currentCarrierName: customer.currentCarrier?.name ?? null,
-    })),
+    customers: customers.map((customer) => {
+      let retentionDisplay: string | null = null;
+      let retentionRemainingDays: number | null = null;
+      const latestCustomerCarrierSale = customer.currentCarrierId
+        ? latestCustomerCarrierSaleMap.get(`${customer.id}:${customer.currentCarrierId}`)
+        : null;
+
+      if (customer.currentCarrierId) {
+        const activationRule = activationRuleMap.get(customer.currentCarrierId);
+
+        if (!activationRule) {
+          retentionDisplay = "규칙 없음";
+        } else {
+          const latestSaleDate = latestCustomerCarrierSale?.saleDate ?? null;
+
+          if (!latestSaleDate) {
+            retentionDisplay = "판매 이력 없음";
+          } else {
+            const eligibleDate = getActivationEligibleDate(latestSaleDate, {
+              countUnit: activationRule.countUnit,
+              countValue: activationRule.countValue,
+              monthCountMode: activationRule.monthCountMode,
+            });
+
+            retentionDisplay = formatRetentionDisplay({
+              countUnit: activationRule.countUnit,
+              countValue: activationRule.countValue,
+              monthCountMode: activationRule.monthCountMode,
+              eligibleDate,
+            });
+            retentionRemainingDays = Math.max(
+              0,
+              Math.ceil(
+                (eligibleDate.getTime() - todayKst.getTime()) / 86_400_000,
+              ),
+            );
+          }
+        }
+      }
+
+      return {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        currentCarrierId: customer.currentCarrierId,
+        currentCarrierName: customer.currentCarrier?.name ?? null,
+        retentionDisplay,
+        retentionRemainingDays,
+        latestSaleDeviceModelId: latestCustomerCarrierSale?.deviceModelId ?? null,
+        latestSaleRatePlanId: latestCustomerCarrierSale?.ratePlanId ?? null,
+        latestSaleAddOnServiceIds:
+          latestCustomerCarrierSale?.selectedAddOnServiceIds ?? [],
+      };
+    }),
     stores,
     carriers: activeCarriers.map((carrier) => ({
       id: carrier.id,
       name: carrier.name,
       code: carrier.code,
-      ratePlans: carrier.ratePlans,
+      ratePlans: carrier.ratePlans
+        .map((ratePlan) => ({
+          id: ratePlan.id,
+          name: ratePlan.name,
+          monthlyFee: ratePlan.monthlyFee,
+          usageCount:
+            ratePlanUsageCountMap.get(`${carrier.id}:${ratePlan.id}`) ?? 0,
+        }))
+        .sort(
+          (left, right) =>
+            right.usageCount - left.usageCount ||
+            right.monthlyFee - left.monthlyFee ||
+            left.name.localeCompare(right.name, "ko"),
+        ),
       addOnServices: [
         ...sharedServices.map((service) => ({
           id: service.id,
           name: `공통 / ${service.name}`,
           monthlyFee: service.monthlyFee,
           scope: "shared" as const,
+          usageCount:
+            addOnServiceUsageCountMap.get(`${carrier.id}:${service.id}`) ?? 0,
         })),
         ...carrier.services.map((service) => ({
           id: service.id,
           name: service.name,
           monthlyFee: service.monthlyFee,
           scope: "carrier" as const,
+          usageCount:
+            addOnServiceUsageCountMap.get(`${carrier.id}:${service.id}`) ?? 0,
         })),
-      ],
+      ].sort(
+        (left, right) =>
+          right.usageCount - left.usageCount ||
+          (right.monthlyFee ?? -1) - (left.monthlyFee ?? -1) ||
+          left.name.localeCompare(right.name, "ko"),
+      ),
     })),
     rebatePolicies: rebatePolicies.map((policy) => ({
       id: policy.id,
@@ -230,6 +403,7 @@ export async function getSalesCommonPageData() {
       carrierName: item.carrier.name,
       deviceModelId: item.deviceModelId,
       deviceModelName: item.deviceModel.name,
+      storeName: item.store?.name ?? null,
       color: item.color,
       capacity: item.capacity,
       imei: item.imei,

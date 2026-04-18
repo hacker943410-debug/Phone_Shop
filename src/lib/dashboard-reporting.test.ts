@@ -5,11 +5,11 @@ import {
 } from "@/lib/dashboard-reporting";
 
 describe("dashboard reporting", () => {
-  it("defaults to the last 7 days when filters are absent", () => {
+  it("defaults to the current week when filters are absent", () => {
     expect(
       resolveDashboardFilters({}, new Date("2026-04-12T09:00:00+09:00")),
     ).toEqual({
-      preset: "7d",
+      preset: "week",
       dateFrom: "2026-04-06",
       dateTo: "2026-04-12",
       storeId: "",

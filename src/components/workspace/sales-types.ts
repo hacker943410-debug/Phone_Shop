@@ -27,12 +27,14 @@ export interface SalesCarrierRecord {
     id: string;
     name: string;
     monthlyFee: number;
+    usageCount: number;
   }>;
   addOnServices: Array<{
     id: string;
     name: string;
     monthlyFee: number | null;
     scope: "shared" | "carrier";
+    usageCount: number;
   }>;
 }
 
@@ -40,7 +42,13 @@ export interface SalesCustomerRecord {
   id: string;
   name: string;
   phone: string;
+  currentCarrierId: string | null;
   currentCarrierName: string | null;
+  retentionDisplay: string | null;
+  retentionRemainingDays: number | null;
+  latestSaleDeviceModelId: string | null;
+  latestSaleRatePlanId: string | null;
+  latestSaleAddOnServiceIds: string[];
 }
 
 export interface SalesFilters {
@@ -113,6 +121,7 @@ export interface SalesAvailableInventoryRecord {
   carrierName: string;
   deviceModelId: string;
   deviceModelName: string;
+  storeName: string | null;
   color: string;
   capacity: string;
   imei: string;

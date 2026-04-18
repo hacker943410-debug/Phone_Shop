@@ -5,56 +5,63 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { SelectControl } from "@/components/workspace/form-client-controls";
 import type {
-  SalesFilters,
-  SalesStoreRecord,
-  SalesStatusFilterValue,
-} from "@/components/workspace/sales-types";
+  CustomerCarrierOption,
+  CustomerFilters,
+} from "@/components/workspace/customers-overview";
 import {
   formControlClassName,
   joinClassNames,
   selectControlClassName,
 } from "@/components/workspace/ui-classnames";
 import {
-  buildSalesQueryString,
-  type SalesUrlFilters,
-} from "@/lib/sales-url-state";
+  buildCustomersQueryString,
+  type CustomersBaseFilters,
+} from "@/lib/customers-url-state";
 
-interface SalesFilterBarProps {
-  carriers: Array<{ id: string; name: string }>;
-  filters: SalesFilters;
-  stores: SalesStoreRecord[];
+interface CustomersFilterBarProps {
+  carriers: CustomerCarrierOption[];
+  filters: CustomerFilters;
+  returnTo: string | null;
 }
 
 function FilterField({
   children,
+  className,
   label,
 }: {
   children: React.ReactNode;
+  className?: string;
   label: string;
 }) {
   return (
-    <div className="space-y-2 text-sm font-medium text-slate-700">
+    <div className={joinClassNames("space-y-2 text-sm font-medium text-slate-700", className)}>
       <span>{label}</span>
       {children}
     </div>
   );
 }
 
-export function SalesFilterBar({
+export function CustomersFilterBar({
   carriers,
   filters,
-  stores,
-}: SalesFilterBarProps) {
+  returnTo,
+}: CustomersFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<number | null>(null);
-  const latestFiltersRef = useRef<SalesUrlFilters>(filters);
-  const latestQueryRef = useRef(buildSalesQueryString(filters));
+  const latestFiltersRef = useRef<CustomersBaseFilters>(filters);
+  const latestQueryRef = useRef(
+    buildCustomersQueryString(filters, {
+      returnTo,
+    }),
+  );
 
   useEffect(() => {
     latestFiltersRef.current = filters;
-    latestQueryRef.current = buildSalesQueryString(filters);
+    latestQueryRef.current = buildCustomersQueryString(filters, {
+      returnTo,
+    });
 
     if (searchInputRef.current && searchInputRef.current.value !== filters.q) {
       searchInputRef.current.value = filters.q;
@@ -65,7 +72,7 @@ export function SalesFilterBar({
         window.clearTimeout(debounceRef.current);
       }
     };
-  }, [filters]);
+  }, [filters, returnTo]);
 
   const pushFilters = useCallback(
     (nextQueryString: string) => {
@@ -81,7 +88,7 @@ export function SalesFilterBar({
     [pathname, router],
   );
 
-  function getDraftFilters(): SalesUrlFilters {
+  function getDraftFilters(): CustomersBaseFilters {
     return {
       ...latestFiltersRef.current,
       q: searchInputRef.current?.value ?? latestFiltersRef.current.q,
@@ -95,40 +102,40 @@ export function SalesFilterBar({
 
     debounceRef.current = window.setTimeout(() => {
       pushFilters(
-        buildSalesQueryString({
-          ...latestFiltersRef.current,
-          q: nextQuery,
-        }),
+        buildCustomersQueryString(
+          {
+            ...latestFiltersRef.current,
+            q: nextQuery,
+          },
+          { returnTo },
+        ),
       );
     }, 320);
   }
 
-  function updateFilters(overrides: Partial<SalesUrlFilters>) {
+  function updateFilters(overrides: Partial<CustomersBaseFilters>) {
     if (debounceRef.current !== null) {
       window.clearTimeout(debounceRef.current);
     }
 
     pushFilters(
-      buildSalesQueryString({
-        ...getDraftFilters(),
-        ...overrides,
-      }),
+      buildCustomersQueryString(
+        {
+          ...getDraftFilters(),
+          ...overrides,
+        },
+        { returnTo },
+      ),
     );
   }
 
-  const unifiedControlClassName =
-    "h-11 min-h-11 rounded-[1rem] px-3.5 py-0 text-[0.95rem]";
-
   return (
-    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
-      <FilterField label="검색어">
+    <div className="flex flex-wrap items-end gap-3">
+      <FilterField className="w-full md:w-[15rem]" label="검색">
         <input
           ref={searchInputRef}
-          aria-label="판매 검색어"
-          className={joinClassNames(
-            formControlClassName,
-            unifiedControlClassName,
-          )}
+          aria-label="고객 검색"
+          className={formControlClassName}
           defaultValue={filters.q}
           onChange={(event) => scheduleQueryPush(event.target.value)}
           onKeyDown={(event) => {
@@ -139,21 +146,18 @@ export function SalesFilterBar({
               });
             }
           }}
-          placeholder="고객명 또는 담당자"
+          placeholder="이름 또는 연락처"
         />
       </FilterField>
 
-      <FilterField label="통신사">
+      <FilterField className="w-full md:w-[10.5rem]" label="통신사">
         <SelectControl
-          aria-label="통신사 필터"
-          className={joinClassNames(
-            selectControlClassName,
-            unifiedControlClassName,
-          )}
+          aria-label="고객 통신사 필터"
+          className={joinClassNames(selectControlClassName, "w-full")}
           onValueChange={(value) => updateFilters({ carrierId: value })}
           value={filters.carrierId}
         >
-          <option value="">전체 통신사</option>
+          <option value="">전체</option>
           {carriers.map((carrier) => (
             <option key={carrier.id} value={carrier.id}>
               {carrier.name}
@@ -162,40 +166,20 @@ export function SalesFilterBar({
         </SelectControl>
       </FilterField>
 
-      <FilterField label="매장">
+      <FilterField className="w-full md:w-[9.5rem]" label="미수">
         <SelectControl
-          aria-label="매장 필터"
-          className={joinClassNames(
-            selectControlClassName,
-            unifiedControlClassName,
-          )}
-          onValueChange={(value) => updateFilters({ storeId: value })}
-          value={filters.storeId}
-        >
-          <option value="">전체 매장</option>
-          {stores.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
-          ))}
-        </SelectControl>
-      </FilterField>
-
-      <FilterField label="처리 상태">
-        <SelectControl
-          aria-label="처리 상태 필터"
-          className={joinClassNames(
-            selectControlClassName,
-            unifiedControlClassName,
-          )}
+          aria-label="고객 미수 필터"
+          className={joinClassNames(selectControlClassName, "w-full")}
           onValueChange={(value) =>
-            updateFilters({ status: value as SalesStatusFilterValue })
+            updateFilters({
+              receivable: value as CustomerFilters["receivable"],
+            })
           }
-          value={filters.status}
+          value={filters.receivable}
         >
-          <option value="all">전체 기록</option>
-          <option value="COMPLETED">완료 판매</option>
-          <option value="CANCELED">취소 이력</option>
+          <option value="all">전체</option>
+          <option value="outstanding">보유</option>
+          <option value="clear">없음</option>
         </SelectControl>
       </FilterField>
     </div>

@@ -8,11 +8,14 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ChangeEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
+  compactSelectControlClassName,
   formControlClassName,
   joinClassNames,
 } from "@/components/workspace/ui-classnames";
@@ -154,26 +157,57 @@ function useDismissLayer(
   }, [active, onDismiss, refs]);
 }
 
-function usePopoverDirection(
-  open: boolean,
+function resolvePopoverPlacement(
   triggerRef: React.RefObject<HTMLElement | null>,
-  panelHeight = 340,
+  {
+    panelHeight = 340,
+    panelWidth = 320,
+    matchTriggerWidth = false,
+  }: {
+    panelHeight?: number;
+    panelWidth?: number;
+    matchTriggerWidth?: boolean;
+  } = {},
 ) {
-  const [openUpward, setOpenUpward] = useState(false);
+  if (!triggerRef.current || typeof window === "undefined") {
+    return {
+      openUpward: false,
+      style: {} as CSSProperties,
+    };
+  }
 
-  useEffect(() => {
-    if (!open || !triggerRef.current) {
-      return;
-    }
+  const rect = triggerRef.current.getBoundingClientRect();
+  const gap = 8;
+  const horizontalMargin = 12;
+  const verticalMargin = 12;
+  const maxAllowedWidth = window.innerWidth - horizontalMargin * 2;
+  const estimatedWidth = matchTriggerWidth
+    ? rect.width
+    : Math.min(Math.max(rect.width, panelWidth), maxAllowedWidth);
+  const availableBelow = window.innerHeight - rect.bottom - verticalMargin;
+  const availableAbove = rect.top - verticalMargin;
+  let left = rect.left;
 
-    const rect = triggerRef.current.getBoundingClientRect();
-    const availableBelow = window.innerHeight - rect.bottom;
-    const availableAbove = rect.top;
+  if (left + estimatedWidth > window.innerWidth - horizontalMargin) {
+    left = rect.right - estimatedWidth;
+  }
 
-    setOpenUpward(availableBelow < panelHeight && availableAbove > availableBelow);
-  }, [open, panelHeight, triggerRef]);
+  left = Math.min(
+    Math.max(horizontalMargin, left),
+    window.innerWidth - horizontalMargin - estimatedWidth,
+  );
+  const openUpward = availableBelow < panelHeight && availableAbove > availableBelow;
 
-  return openUpward;
+  return {
+    openUpward,
+    style: {
+      left,
+      width: estimatedWidth,
+      ...(openUpward
+        ? { bottom: window.innerHeight - rect.top + gap }
+        : { top: rect.bottom + gap }),
+    } satisfies CSSProperties,
+  };
 }
 
 function createSyntheticChangeEvent<
@@ -303,10 +337,13 @@ const triggerClassName = joinClassNames(
 );
 
 const iconButtonClassName =
-  "flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-blue-100 bg-blue-50 text-blue-700 transition duration-150 hover:-translate-y-px hover:border-blue-200 hover:bg-blue-100 hover:shadow-[0_12px_20px_-18px_rgba(37,99,235,0.55)]";
+  "flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-800 transition duration-150 hover:-translate-y-px hover:border-amber-300 hover:bg-amber-100 hover:shadow-[0_12px_20px_-18px_rgba(180,83,9,0.4)]";
+
+const selectPopoverSurfaceClassName =
+  "fixed z-[120] min-w-0 overflow-hidden rounded-[1.4rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(247,245,241,0.98)_100%)] shadow-[0_28px_60px_-30px_rgba(15,23,42,0.32)] backdrop-blur";
 
 const popoverSurfaceClassName =
-  "absolute z-40 w-[22rem] min-w-full max-w-[calc(100vw-2rem)] overflow-hidden rounded-[1.4rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(247,245,241,0.98)_100%)] shadow-[0_28px_60px_-30px_rgba(15,23,42,0.32)] backdrop-blur";
+  "fixed z-[120] min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden rounded-[1.3rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(247,245,241,0.98)_100%)] shadow-[0_28px_60px_-30px_rgba(15,23,42,0.32)] backdrop-blur";
 
 function ChevronDownIcon() {
   return (
@@ -439,9 +476,50 @@ export function SelectControl({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const openUpward = usePopoverDirection(open, triggerRef, 320);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
 
   useDismissLayer([triggerRef, panelRef], open, () => setOpen(false));
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function updatePlacement() {
+      const placement = resolvePopoverPlacement(triggerRef, {
+        panelHeight: 320,
+        panelWidth: triggerRef.current?.offsetWidth ?? 240,
+        matchTriggerWidth: true,
+      });
+
+      setPopoverStyle(placement.style);
+    }
+
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [open]);
+
+  function toggleOpen() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+
+    const placement = resolvePopoverPlacement(triggerRef, {
+      panelHeight: 320,
+      panelWidth: triggerRef.current?.offsetWidth ?? 240,
+      matchTriggerWidth: true,
+    });
+
+    setPopoverStyle(placement.style);
+    setOpen(true);
+  }
 
   function commitValue(nextValue: string) {
     if (!isControlled) {
@@ -454,7 +532,7 @@ export function SelectControl({
   }
 
   return (
-    <div className="relative">
+    <div className="relative w-full">
       {name ? <input name={name} type="hidden" value={selectedValue} /> : null}
 
       <button
@@ -474,7 +552,7 @@ export function SelectControl({
         )}
         disabled={disabled}
         id={id}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleOpen}
         tabIndex={tabIndex}
         title={title}
         type="button"
@@ -492,15 +570,15 @@ export function SelectControl({
         </span>
       </button>
 
-      {open ? (
+      {open && typeof document !== "undefined"
+        ? createPortal(
         <div
           ref={panelRef}
           className={joinClassNames(
             popoverSurfaceClassName,
-            openUpward
-              ? "bottom-[calc(100%+0.55rem)]"
-              : "top-[calc(100%+0.55rem)]",
+            selectPopoverSurfaceClassName,
           )}
+          style={popoverStyle}
         >
           <div className="border-b border-stone-200 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
@@ -533,7 +611,7 @@ export function SelectControl({
                       ? "cursor-not-allowed text-slate-300"
                       : selected
                         ? "bg-slate-950 text-white shadow-[0_16px_24px_-20px_rgba(15,23,42,0.8)] hover:-translate-y-px hover:bg-slate-900 hover:shadow-[0_18px_28px_-22px_rgba(15,23,42,0.78)]"
-                        : "text-slate-700 hover:-translate-y-px hover:bg-blue-50 hover:text-slate-950 hover:shadow-[0_14px_24px_-22px_rgba(37,99,235,0.45)]",
+                        : "text-slate-700 hover:-translate-y-px hover:bg-amber-50 hover:text-slate-950 hover:shadow-[0_14px_24px_-22px_rgba(180,83,9,0.3)]",
                   )}
                   disabled={option.disabled}
                   onClick={() => commitValue(option.value)}
@@ -555,9 +633,20 @@ export function SelectControl({
               );
             })}
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </div>
+  );
+}
+
+export function CompactSelectControl(props: SelectControlProps) {
+  return (
+    <SelectControl
+      {...props}
+      className={joinClassNames(compactSelectControlClassName, props.className)}
+    />
   );
 }
 
@@ -612,18 +701,50 @@ export function DateControl({
   );
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const openUpward = usePopoverDirection(open, triggerRef, 390);
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
+
+  useDismissLayer([triggerRef, panelRef], open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
+    function updatePlacement() {
+      const placement = resolvePopoverPlacement(triggerRef, {
+        panelHeight: 360,
+        panelWidth: 288,
+      });
+
+      setPopoverStyle(placement.style);
+    }
+
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [open]);
+
+  function toggleOpen() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+
     setMode("day");
     setViewDate(selectedDate ?? new Date());
-  }, [open, selectedDate]);
+    const placement = resolvePopoverPlacement(triggerRef, {
+      panelHeight: 360,
+      panelWidth: 288,
+    });
 
-  useDismissLayer([triggerRef, panelRef], open, () => setOpen(false));
+    setPopoverStyle(placement.style);
+    setOpen(true);
+  }
 
   function commitValue(nextValue: string) {
     if (!isControlled) {
@@ -685,7 +806,7 @@ export function DateControl({
         )}
         disabled={disabled}
         id={id}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleOpen}
         tabIndex={tabIndex}
         title={title}
         type="button"
@@ -703,18 +824,17 @@ export function DateControl({
         </span>
       </button>
 
-      {open ? (
+      {open && typeof document !== "undefined"
+        ? createPortal(
         <div
           ref={panelRef}
           className={joinClassNames(
             popoverSurfaceClassName,
-            openUpward
-              ? "bottom-[calc(100%+0.55rem)]"
-              : "top-[calc(100%+0.55rem)]",
           )}
+          style={popoverStyle}
           role="dialog"
         >
-          <div className="border-b border-stone-200 px-4 py-3">
+          <div className="border-b border-stone-200 px-3.5 py-2.5">
             <div className="flex items-center justify-between gap-2">
               <button
                 className={iconButtonClassName}
@@ -727,7 +847,7 @@ export function DateControl({
               <div className="flex items-center gap-1.5">
                 <button
                   className={joinClassNames(
-                    "rounded-full px-3 py-1.5 text-sm font-semibold transition",
+                    "rounded-full px-2.5 py-1.5 text-sm font-semibold transition",
                     mode === "year"
                       ? "bg-slate-950 text-white"
                       : "bg-stone-100 text-slate-700 hover:bg-stone-200",
@@ -739,7 +859,7 @@ export function DateControl({
                 </button>
                 <button
                   className={joinClassNames(
-                    "rounded-full px-3 py-1.5 text-sm font-semibold transition",
+                    "rounded-full px-2.5 py-1.5 text-sm font-semibold transition",
                     mode === "month"
                       ? "bg-slate-950 text-white"
                       : "bg-stone-100 text-slate-700 hover:bg-stone-200",
@@ -762,15 +882,15 @@ export function DateControl({
           </div>
 
           {mode === "day" ? (
-            <div className="px-4 pb-4 pt-3">
-              <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[0.72rem] font-semibold text-slate-500">
+            <div className="px-3.5 pb-3.5 pt-2.5">
+              <div className="mb-1.5 grid grid-cols-7 gap-1 text-center text-[0.68rem] font-semibold text-slate-500">
                 {calendarWeekdays.map((weekday) => (
                   <span key={weekday} className="py-2">
                     {weekday}
                   </span>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1.5">
+              <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map(({ date, isCurrentMonth }) => {
                   const disabledDate = isDateDisabled(date, minValue, maxValue);
                   const selected = selectedDate ? isSameDate(date, selectedDate) : false;
@@ -781,7 +901,7 @@ export function DateControl({
                       key={formatDateValue(date)}
                       aria-label={formatDateValue(date)}
                       className={joinClassNames(
-                        "flex h-10 cursor-pointer items-center justify-center rounded-2xl text-sm font-medium transition duration-150",
+                        "flex h-9 cursor-pointer items-center justify-center rounded-2xl text-sm font-medium transition duration-150",
                         !isCurrentMonth && "text-slate-300",
                         isCurrentMonth && "text-slate-700",
                         isToday &&
@@ -807,7 +927,7 @@ export function DateControl({
           ) : null}
 
           {mode === "month" ? (
-            <div className="grid grid-cols-3 gap-2 px-4 pb-4 pt-3">
+            <div className="grid grid-cols-3 gap-1.5 px-3.5 pb-3.5 pt-2.5">
               {calendarMonths.map((monthLabel, monthIndex) => {
                 const selected =
                   selectedDate &&
@@ -818,7 +938,7 @@ export function DateControl({
                   <button
                     key={monthLabel}
                     className={joinClassNames(
-                      "cursor-pointer rounded-2xl px-3 py-3 text-sm font-semibold transition duration-150",
+                      "cursor-pointer rounded-2xl px-3 py-2.5 text-sm font-semibold transition duration-150",
                       selected
                         ? "bg-slate-950 text-white shadow-[0_16px_24px_-20px_rgba(15,23,42,0.8)] hover:-translate-y-px hover:bg-slate-900"
                         : "bg-stone-100 text-slate-700 hover:-translate-y-px hover:bg-blue-50 hover:text-blue-800 hover:shadow-[0_12px_18px_-18px_rgba(37,99,235,0.42)]",
@@ -837,11 +957,11 @@ export function DateControl({
           ) : null}
 
           {mode === "year" ? (
-            <div className="px-4 pb-4 pt-3">
+            <div className="px-3.5 pb-3.5 pt-2.5">
               <p className="mb-3 text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
                 연도 선택
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 {yearOptions.map((yearOption) => {
                   const selected = selectedDate?.getFullYear() === yearOption;
 
@@ -849,7 +969,7 @@ export function DateControl({
                     <button
                       key={yearOption}
                       className={joinClassNames(
-                        "cursor-pointer rounded-2xl px-3 py-3 text-sm font-semibold transition duration-150",
+                        "cursor-pointer rounded-2xl px-3 py-2.5 text-sm font-semibold transition duration-150",
                         selected
                           ? "bg-slate-950 text-white shadow-[0_16px_24px_-20px_rgba(15,23,42,0.8)] hover:-translate-y-px hover:bg-slate-900"
                           : "bg-stone-100 text-slate-700 hover:-translate-y-px hover:bg-blue-50 hover:text-blue-800 hover:shadow-[0_12px_18px_-18px_rgba(37,99,235,0.42)]",
@@ -868,7 +988,7 @@ export function DateControl({
             </div>
           ) : null}
 
-          <div className="flex items-center justify-between border-t border-stone-200 px-4 py-3">
+          <div className="flex items-center justify-between border-t border-stone-200 px-3.5 py-2.5">
             <button
               className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
               onClick={() => {
@@ -888,8 +1008,10 @@ export function DateControl({
               지우기
             </button>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </div>
   );
 }

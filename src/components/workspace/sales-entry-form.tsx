@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { createSaleAction } from "@/app/actions/sales";
 import { formatWon } from "@/lib/formatters";
 import { normalizeMoneyInput } from "@/lib/phone-utils";
+import { resolveCustomerMappedSelection } from "@/lib/sales-customer-mapping";
 import {
   calculatePolicyRevenueAmount,
   calculateSalesAmounts,
@@ -24,12 +25,9 @@ import type {
   SalesRebatePolicyRecord,
   SalesSaleProfitPolicyRecord,
 } from "./sales-types";
+import { SelectControl } from "./form-client-controls";
+import { SalesEntryBasicsStep } from "./sales-entry-basics-step";
 import {
-  DateControl,
-  SelectControl,
-} from "./form-client-controls";
-import {
-  dateControlClassName,
   formControlClassName,
   primaryButtonClassName,
   secondaryButtonClassName,
@@ -37,11 +35,14 @@ import {
 } from "./ui-classnames";
 
 const controlClassName = formControlClassName;
-const dateFieldClassName = dateControlClassName;
 const selectClassName = selectControlClassName;
+const pricingFieldClassName = `${controlClassName} h-11 min-h-11`;
+const pricingSelectClassName = `${selectClassName} h-11 min-h-11`;
 const labelClassName = "space-y-1.5 text-sm font-medium text-slate-700";
 const surfaceClassName =
   "rounded-lg border border-stone-200 bg-stone-50 p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05),0_1px_2px_rgba(15,23,42,0.08)]";
+
+type NumericDisplayFormat = "currency" | "percentage" | "months";
 
 const saleSteps = [
   {
@@ -73,6 +74,7 @@ interface SalesEntryFormProps {
   discountPolicies: SalesDiscountPolicyRecord[];
   rebatePolicies: SalesRebatePolicyRecord[];
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
+  initialCustomerId?: string;
 }
 
 function parseOptionalInteger(value: string) {
@@ -89,11 +91,11 @@ function parseOptionalInteger(value: string) {
   return parsed;
 }
 
-function sanitizeMoneyField(
-  setter: Dispatch<SetStateAction<string>>,
-  value: string,
-) {
-  setter(normalizeMoneyInput(value));
+function areStringArraysEqual(left: string[], right: string[]) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function getDiscountLabel(
@@ -107,38 +109,141 @@ function getDiscountLabel(
   return method === "PERCENTAGE" ? `${value}%` : formatWon(value);
 }
 
+function normalizeDisplayDigits(value: string, maxDigits?: number) {
+  const normalized = normalizeMoneyInput(value);
+
+  return maxDigits ? normalized.slice(0, maxDigits) : normalized;
+}
+
+function formatNumericDisplayValue(
+  value: string,
+  displayFormat: NumericDisplayFormat,
+) {
+  const normalized = normalizeMoneyInput(value);
+
+  if (!normalized) {
+    return "";
+  }
+
+  const numericValue = Number.parseInt(normalized, 10);
+
+  if (!Number.isFinite(numericValue)) {
+    return "";
+  }
+
+  if (displayFormat === "currency") {
+    return numericValue.toLocaleString("ko-KR");
+  }
+
+  return String(numericValue);
+}
+
+function getNumericDisplaySuffix(displayFormat: NumericDisplayFormat) {
+  if (displayFormat === "percentage") {
+    return "%";
+  }
+
+  if (displayFormat === "months") {
+    return "개월";
+  }
+
+  return "원";
+}
+
+function getNumericDisplayPaddingClassName(displayFormat: NumericDisplayFormat) {
+  if (displayFormat === "currency") {
+    return "pr-14";
+  }
+
+  if (displayFormat === "months") {
+    return "pr-12";
+  }
+
+  return "pr-10";
+}
+
+function FormattedNumberInput({
+  ariaLabel,
+  displayFormat,
+  maxDigits,
+  name,
+  onValueChange,
+  placeholder,
+  required,
+  value,
+}: {
+  ariaLabel: string;
+  displayFormat: NumericDisplayFormat;
+  maxDigits?: number;
+  name: string;
+  onValueChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  value: string;
+}) {
+  const displayValue = formatNumericDisplayValue(value, displayFormat);
+  const suffix = getNumericDisplaySuffix(displayFormat);
+
+  return (
+    <>
+      <input name={name} type="hidden" value={value} />
+      <div className="relative">
+        <input
+          aria-label={ariaLabel}
+          className={`${pricingFieldClassName} ${displayValue ? getNumericDisplayPaddingClassName(displayFormat) : ""}`}
+          inputMode="numeric"
+          onChange={(event) =>
+            onValueChange(normalizeDisplayDigits(event.target.value, maxDigits))
+          }
+          placeholder={placeholder}
+          required={required}
+          type="text"
+          value={displayValue}
+        />
+        {displayValue ? (
+          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-medium text-slate-500">
+            {suffix}
+          </span>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 function StepButton({
   title,
-  description,
   eyebrow,
   active,
   complete,
+  disabled,
   onClick,
 }: {
   title: string;
-  description: string;
   eyebrow: string;
   active: boolean;
   complete: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       className={`rounded-xl border px-4 py-3.5 text-left transition ${
-        active
-          ? "border-blue-500 bg-blue-50 text-blue-950 shadow-[0_12px_24px_-22px_rgba(37,99,235,0.7)]"
+        disabled
+          ? "cursor-not-allowed border-stone-200 bg-stone-100/90 text-slate-400 shadow-none"
+          : active
+          ? "border-amber-300 bg-amber-50/85 text-stone-950 shadow-[0_12px_24px_-22px_rgba(180,83,9,0.42)]"
           : complete
-            ? "border-teal-200 bg-teal-50 text-teal-950 hover:-translate-y-px hover:shadow-[0_12px_24px_-22px_rgba(13,148,136,0.45)]"
-            : "border-stone-200 bg-white text-slate-700 hover:-translate-y-px hover:border-blue-200 hover:bg-blue-50/70 hover:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)]"
+            ? "cursor-pointer border-teal-200 bg-teal-50 text-teal-950 hover:-translate-y-px hover:shadow-[0_12px_24px_-22px_rgba(13,148,136,0.45)]"
+            : "cursor-pointer border-stone-200 bg-white text-slate-700 hover:-translate-y-px hover:border-amber-200 hover:bg-amber-50/70 hover:shadow-[0_12px_24px_-22px_rgba(15,23,42,0.2)]"
       }`}
     >
       <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
         {eyebrow}
       </p>
       <p className="mt-1.5 text-sm font-semibold">{title}</p>
-      <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
     </button>
   );
 }
@@ -197,15 +302,36 @@ export function SalesEntryForm({
   discountPolicies,
   rebatePolicies,
   saleProfitPolicies,
+  initialCustomerId,
 }: SalesEntryFormProps) {
-  const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
+  const initialResolvedCustomerId = customers.some(
+    (customer) => customer.id === initialCustomerId,
+  )
+    ? (initialCustomerId ?? "")
+    : (customers[0]?.id ?? "");
+  const initialSelectedCustomer =
+    customers.find((customer) => customer.id === initialResolvedCustomerId) ?? null;
+  const initialMappedSelection = resolveCustomerMappedSelection({
+    customer: initialSelectedCustomer,
+    currentInventoryItemId: availableInventory[0]?.id ?? "",
+    availableInventory,
+    carriers,
+  });
+
+  const [customerId, setCustomerId] = useState(initialResolvedCustomerId);
   const [inventoryItemId, setInventoryItemId] = useState(
-    availableInventory[0]?.id ?? "",
+    initialMappedSelection
+      ? (initialMappedSelection.inventoryItemId ?? "")
+      : (availableInventory[0]?.id ?? ""),
   );
   const [saleDate, setSaleDate] = useState(defaultSaleDate);
-  const [ratePlanId, setRatePlanId] = useState("");
+  const [ratePlanId, setRatePlanId] = useState(
+    initialMappedSelection?.inventoryItemId ? initialMappedSelection.ratePlanId : "",
+  );
   const [selectedAddOnServiceIds, setSelectedAddOnServiceIds] = useState<string[]>(
-    [],
+    initialMappedSelection?.inventoryItemId
+      ? initialMappedSelection.selectedAddOnServiceIds
+      : [],
   );
   const [listPrice, setListPrice] = useState("");
   const [discountApplied, setDiscountApplied] = useState(true);
@@ -377,21 +503,61 @@ export function SalesEntryForm({
     parsedListPrice <= 0 ||
     Boolean(formIssue);
 
+  function handleCustomerSelection(nextCustomerId: string) {
+    const nextCustomer = customers.find((customer) => customer.id === nextCustomerId) ?? null;
+    const mappedSelection = resolveCustomerMappedSelection({
+      customer: nextCustomer,
+      currentInventoryItemId: inventoryItemId,
+      availableInventory,
+      carriers,
+    });
+
+    setCustomerId(nextCustomerId);
+
+    if (!mappedSelection) {
+      return;
+    }
+
+    setInventoryItemId(mappedSelection.inventoryItemId ?? "");
+    setRatePlanId(mappedSelection.inventoryItemId ? mappedSelection.ratePlanId : "");
+    setSelectedAddOnServiceIds((current) =>
+      areStringArraysEqual(current, mappedSelection.selectedAddOnServiceIds)
+        ? current
+        : mappedSelection.inventoryItemId
+          ? mappedSelection.selectedAddOnServiceIds
+          : [],
+    );
+  }
+
   const basicsStepValid =
     Boolean(selectedCustomer) &&
     Boolean(selectedInventory) &&
     Boolean(saleDate) &&
     (availableRatePlans.length === 0 || Boolean(effectiveRatePlanId));
   const pricingStepValid = parsedListPrice > 0 && !formIssue;
+  const manualDiscountDisplayFormat: NumericDisplayFormat =
+    manualDiscountMethod === "PERCENTAGE" ? "percentage" : "currency";
+  const manualDiscountPlaceholder =
+    manualDiscountMethod === "PERCENTAGE" ? "8%" : "120,000원";
+
+  function canMoveToStep(nextStep: number) {
+    const boundedStep = Math.max(0, Math.min(nextStep, saleSteps.length - 1));
+
+    if (boundedStep > 1 && !pricingStepValid) {
+      return false;
+    }
+
+    if (boundedStep > 0 && !basicsStepValid) {
+      return false;
+    }
+
+    return true;
+  }
 
   function moveToStep(nextStep: number) {
     const boundedStep = Math.max(0, Math.min(nextStep, saleSteps.length - 1));
 
-    if (boundedStep > 1 && !pricingStepValid) {
-      return;
-    }
-
-    if (boundedStep > 0 && !basicsStepValid) {
+    if (!canMoveToStep(boundedStep)) {
       return;
     }
 
@@ -415,6 +581,13 @@ export function SalesEntryForm({
       action={createSaleAction}
       className="grid gap-6 xl:grid-cols-[1.06fr_0.94fr]"
     >
+      <input name="customerId" type="hidden" value={customerId} />
+      <input name="inventoryItemId" type="hidden" value={inventoryItemId} />
+      <input name="ratePlanId" type="hidden" value={effectiveRatePlanId} />
+      {effectiveSelectedAddOnServiceIds.map((serviceId) => (
+        <input key={serviceId} name="addOnServiceIds" type="hidden" value={serviceId} />
+      ))}
+
       <div className="xl:col-span-2">
         <div className="grid gap-3 md:grid-cols-3">
           {saleSteps.map((step, index) => (
@@ -422,127 +595,38 @@ export function SalesEntryForm({
               key={step.key}
               eyebrow={step.eyebrow}
               title={step.title}
-              description={step.description}
               active={currentStep === index}
               complete={currentStep > index}
+              disabled={index > currentStep && !canMoveToStep(index)}
               onClick={() => moveToStep(index)}
             />
           ))}
         </div>
       </div>
 
-      <section className="space-y-4">
+      <section className={currentStep === 0 ? "xl:col-span-2" : "space-y-4"}>
         {currentStep === 0 ? (
-          <article className={surfaceClassName}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Sales Input
-                </p>
-                <h3 className="mt-1 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                  고객과 재고를 먼저 확정합니다
-                </h3>
-              </div>
-              <span className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white">
-                담당 {currentUserName}
-              </span>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <label className={labelClassName}>
-                <span>고객</span>
-                <SelectControl
-                  aria-label="고객"
-                  name="customerId"
-                  value={customerId}
-                  onValueChange={setCustomerId}
-                  className={selectClassName}
-                  required
-                >
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} / {customer.phone}
-                      {customer.currentCarrierName
-                        ? ` / ${customer.currentCarrierName}`
-                        : ""}
-                    </option>
-                  ))}
-                </SelectControl>
-              </label>
-
-              <label className={labelClassName}>
-                <span>판매일</span>
-                <DateControl
-                  aria-label="판매일"
-                  name="saleDate"
-                  value={saleDate}
-                  onValueChange={setSaleDate}
-                  className={dateFieldClassName}
-                  required
-                />
-              </label>
-
-              <label className={`${labelClassName} md:col-span-2`}>
-                <span>판매 재고</span>
-                <SelectControl
-                  aria-label="판매 재고"
-                  name="inventoryItemId"
-                  value={inventoryItemId}
-                  onValueChange={setInventoryItemId}
-                  className={selectClassName}
-                  required
-                >
-                  {availableInventory.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.carrierName} {item.deviceModelName} / {item.color} /{" "}
-                      {item.capacity} / IMEI {item.imei}
-                    </option>
-                  ))}
-                </SelectControl>
-              </label>
-
-              <label className={labelClassName}>
-                <span>요금제</span>
-                <SelectControl
-                  aria-label="요금제"
-                  name="ratePlanId"
-                  value={effectiveRatePlanId}
-                  onValueChange={setRatePlanId}
-                  className={selectClassName}
-                  required={availableRatePlans.length > 0}
-                  disabled={availableRatePlans.length === 0}
-                >
-                  {availableRatePlans.length === 0 ? (
-                    <option value="">선택 가능한 요금제가 없습니다.</option>
-                  ) : null}
-                  {availableRatePlans.map((ratePlan) => (
-                    <option key={ratePlan.id} value={ratePlan.id}>
-                      {ratePlan.name} / {formatWon(ratePlan.monthlyFee)}
-                    </option>
-                  ))}
-                </SelectControl>
-              </label>
-            </div>
-
-            <div className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-              <p className="font-medium text-slate-900">
-                {selectedInventory?.carrierName} {selectedInventory?.deviceModelName}
-              </p>
-              <p className="mt-1">
-                {selectedInventory?.color} / {selectedInventory?.capacity} / 원가{" "}
-                {selectedInventory ? formatWon(selectedInventory.costAmount) : "-"}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                고객 현재 회선 {selectedCustomer?.currentCarrierName ?? "미정"}
-              </p>
-            </div>
-
-            <WizardNav
-              currentStep={currentStep}
-              moveToStep={moveToStep}
-              canGoNext={basicsStepValid}
-            />
-          </article>
+          <SalesEntryBasicsStep
+            availableAddOnServices={availableAddOnServices}
+            availableInventory={availableInventory}
+            availableRatePlans={availableRatePlans}
+            basicsStepValid={basicsStepValid}
+            currentUserName={currentUserName}
+            customerId={customerId}
+            customers={customers}
+            effectiveRatePlanId={effectiveRatePlanId}
+            effectiveSelectedAddOnServiceIds={effectiveSelectedAddOnServiceIds}
+            inventoryItemId={inventoryItemId}
+            moveToStep={moveToStep}
+            saleDate={saleDate}
+            selectedCustomer={selectedCustomer}
+            selectedInventory={selectedInventory}
+            setCustomerId={handleCustomerSelection}
+            setInventoryItemId={setInventoryItemId}
+            setRatePlanId={setRatePlanId}
+            setSaleDate={setSaleDate}
+            setSelectedAddOnServiceIds={setSelectedAddOnServiceIds}
+          />
         ) : null}
 
         {currentStep === 1 ? (
@@ -554,18 +638,14 @@ export function SalesEntryForm({
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               <label className={labelClassName}>
                 <span>판매가</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="판매가"
+                  displayFormat="currency"
                   name="listPrice"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
-                  value={listPrice}
-                  onChange={(event) =>
-                    sanitizeMoneyField(setListPrice, event.target.value)
-                  }
-                  className={controlClassName}
-                  placeholder="1280000"
+                  onValueChange={setListPrice}
+                  placeholder="1,280,000원"
                   required
+                  value={listPrice}
                 />
               </label>
 
@@ -578,7 +658,7 @@ export function SalesEntryForm({
                   onValueChange={(nextValue) =>
                     setDiscountApplied(nextValue === "true")
                   }
-                  className={selectClassName}
+                  className={pricingSelectClassName}
                 >
                   <option value="true">적용</option>
                   <option value="false">미적용</option>
@@ -592,7 +672,7 @@ export function SalesEntryForm({
                   name="discountMethod"
                   value={manualDiscountMethod}
                   onValueChange={setManualDiscountMethod}
-                  className={selectClassName}
+                  className={pricingSelectClassName}
                 >
                   <option value="">자동 정책 사용</option>
                   <option value="PERCENTAGE">퍼센트</option>
@@ -602,121 +682,92 @@ export function SalesEntryForm({
 
               <label className={labelClassName}>
                 <span>수동 할인값</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="수동 할인값"
+                  displayFormat={manualDiscountDisplayFormat}
+                  maxDigits={manualDiscountMethod === "PERCENTAGE" ? 3 : undefined}
                   name="discountValue"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
+                  onValueChange={setManualDiscountValue}
+                  placeholder={manualDiscountPlaceholder}
                   value={manualDiscountValue}
-                  onChange={(event) =>
-                    sanitizeMoneyField(setManualDiscountValue, event.target.value)
-                  }
-                  className={controlClassName}
-                  placeholder="예: 8 또는 120000"
                 />
               </label>
 
               <label className={labelClassName}>
                 <span>리베이트 금액</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="리베이트 금액"
+                  displayFormat="currency"
                   name="rebateAmount"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
+                  onValueChange={setRebateAmount}
+                  placeholder="정책 기본값 또는 0원"
                   value={rebateAmount}
-                  onChange={(event) =>
-                    sanitizeMoneyField(setRebateAmount, event.target.value)
-                  }
-                  className={controlClassName}
-                  placeholder="비우면 정책 기본값 사용"
                 />
               </label>
 
               <label className={labelClassName}>
                 <span>지원금</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="지원금"
+                  displayFormat="currency"
                   name="subsidyAmount"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
+                  onValueChange={setSubsidyAmount}
+                  placeholder="0원"
                   value={subsidyAmount}
-                  onChange={(event) =>
-                    sanitizeMoneyField(setSubsidyAmount, event.target.value)
-                  }
-                  className={controlClassName}
-                  placeholder="0"
                 />
               </label>
 
               <label className={labelClassName}>
                 <span>현금 수납</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="현금 수납"
+                  displayFormat="currency"
                   name="cashAmount"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
+                  onValueChange={setCashAmount}
+                  placeholder="0원"
                   value={cashAmount}
-                  onChange={(event) =>
-                    sanitizeMoneyField(setCashAmount, event.target.value)
-                  }
-                  className={controlClassName}
-                  placeholder="0"
                 />
               </label>
 
               <label className={labelClassName}>
                 <span>카드 수납</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="카드 수납"
+                  displayFormat="currency"
                   name="cardAmount"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
+                  onValueChange={setCardAmount}
+                  placeholder="0원"
                   value={cardAmount}
-                  onChange={(event) =>
-                    sanitizeMoneyField(setCardAmount, event.target.value)
-                  }
-                  className={controlClassName}
-                  placeholder="0"
                 />
               </label>
 
               <label className={labelClassName}>
                 <span>계좌이체 수납</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="계좌이체 수납"
+                  displayFormat="currency"
                   name="bankTransferAmount"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
+                  onValueChange={setBankTransferAmount}
+                  placeholder="0원"
                   value={bankTransferAmount}
-                  onChange={(event) =>
-                    sanitizeMoneyField(setBankTransferAmount, event.target.value)
-                  }
-                  className={controlClassName}
-                  placeholder="0"
                 />
               </label>
 
               <label className={labelClassName}>
                 <span>카드 할부 개월</span>
-                <input
+                <FormattedNumberInput
+                  ariaLabel="카드 할부 개월"
+                  displayFormat="months"
                   name="cardInstallmentMonths"
-                  type="number"
-                  min="0"
-                  inputMode="numeric"
+                  onValueChange={setCardInstallmentMonths}
+                  placeholder="예: 24개월"
                   value={cardInstallmentMonths}
-                  onChange={(event) =>
-                    sanitizeMoneyField(
-                      setCardInstallmentMonths,
-                      event.target.value,
-                    )
-                  }
-                  className={controlClassName}
-                  placeholder="일시불이면 비우기"
                 />
               </label>
             </div>
 
             <div className="mt-5 space-y-3">
+              {false ? (
               <div>
                 <p className="text-sm font-medium text-slate-700">부가서비스</p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -773,6 +824,7 @@ export function SalesEntryForm({
                   )}
                 </div>
               </div>
+              ) : null}
 
               <label className={`${labelClassName} block`}>
                 <span>메모</span>
@@ -872,7 +924,7 @@ export function SalesEntryForm({
         ) : null}
       </section>
 
-      <aside className="space-y-4">
+      {currentStep >= 1 ? <aside className="space-y-4">
         {currentStep === 0 ? (
           <article className={surfaceClassName}>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -1009,7 +1061,7 @@ export function SalesEntryForm({
             </div>
           </article>
         ) : null}
-      </aside>
+      </aside> : null}
     </form>
   );
 }

@@ -5,24 +5,25 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { SelectControl } from "@/components/workspace/form-client-controls";
 import type {
-  SalesFilters,
-  SalesStoreRecord,
-  SalesStatusFilterValue,
-} from "@/components/workspace/sales-types";
+  ReceivableCarrierOption,
+  ReceivableCustomerOption,
+  ReceivablesFilters,
+  ReceivableStatusValue,
+} from "@/components/workspace/receivables-types";
 import {
   formControlClassName,
   joinClassNames,
   selectControlClassName,
 } from "@/components/workspace/ui-classnames";
 import {
-  buildSalesQueryString,
-  type SalesUrlFilters,
-} from "@/lib/sales-url-state";
+  buildReceivablesQueryString,
+  type ReceivablesUrlFilters,
+} from "@/lib/receivables-url-state";
 
-interface SalesFilterBarProps {
-  carriers: Array<{ id: string; name: string }>;
-  filters: SalesFilters;
-  stores: SalesStoreRecord[];
+interface ReceivablesFilterBarProps {
+  carriers: ReceivableCarrierOption[];
+  customers: ReceivableCustomerOption[];
+  filters: ReceivablesFilters;
 }
 
 function FilterField({
@@ -40,21 +41,21 @@ function FilterField({
   );
 }
 
-export function SalesFilterBar({
+export function ReceivablesFilterBar({
   carriers,
+  customers,
   filters,
-  stores,
-}: SalesFilterBarProps) {
+}: ReceivablesFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<number | null>(null);
-  const latestFiltersRef = useRef<SalesUrlFilters>(filters);
-  const latestQueryRef = useRef(buildSalesQueryString(filters));
+  const latestFiltersRef = useRef<ReceivablesUrlFilters>(filters);
+  const latestQueryRef = useRef(buildReceivablesQueryString(filters));
 
   useEffect(() => {
     latestFiltersRef.current = filters;
-    latestQueryRef.current = buildSalesQueryString(filters);
+    latestQueryRef.current = buildReceivablesQueryString(filters);
 
     if (searchInputRef.current && searchInputRef.current.value !== filters.q) {
       searchInputRef.current.value = filters.q;
@@ -81,7 +82,7 @@ export function SalesFilterBar({
     [pathname, router],
   );
 
-  function getDraftFilters(): SalesUrlFilters {
+  function getDraftFilters(): ReceivablesUrlFilters {
     return {
       ...latestFiltersRef.current,
       q: searchInputRef.current?.value ?? latestFiltersRef.current.q,
@@ -95,7 +96,7 @@ export function SalesFilterBar({
 
     debounceRef.current = window.setTimeout(() => {
       pushFilters(
-        buildSalesQueryString({
+        buildReceivablesQueryString({
           ...latestFiltersRef.current,
           q: nextQuery,
         }),
@@ -103,13 +104,13 @@ export function SalesFilterBar({
     }, 320);
   }
 
-  function updateFilters(overrides: Partial<SalesUrlFilters>) {
+  function updateFilters(overrides: Partial<ReceivablesUrlFilters>) {
     if (debounceRef.current !== null) {
       window.clearTimeout(debounceRef.current);
     }
 
     pushFilters(
-      buildSalesQueryString({
+      buildReceivablesQueryString({
         ...getDraftFilters(),
         ...overrides,
       }),
@@ -120,11 +121,11 @@ export function SalesFilterBar({
     "h-11 min-h-11 rounded-[1rem] px-3.5 py-0 text-[0.95rem]";
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
-      <FilterField label="검색어">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <FilterField label="고객 검색">
         <input
           ref={searchInputRef}
-          aria-label="판매 검색어"
+          aria-label="미수금 고객 검색"
           className={joinClassNames(
             formControlClassName,
             unifiedControlClassName,
@@ -139,8 +140,27 @@ export function SalesFilterBar({
               });
             }
           }}
-          placeholder="고객명 또는 담당자"
+          placeholder="고객명 또는 연락처"
         />
+      </FilterField>
+
+      <FilterField label="고객">
+        <SelectControl
+          aria-label="고객 필터"
+          className={joinClassNames(
+            selectControlClassName,
+            unifiedControlClassName,
+          )}
+          onValueChange={(value) => updateFilters({ customerId: value })}
+          value={filters.customerId}
+        >
+          <option value="">전체 고객</option>
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.name} / {customer.phone}
+            </option>
+          ))}
+        </SelectControl>
       </FilterField>
 
       <FilterField label="통신사">
@@ -162,40 +182,22 @@ export function SalesFilterBar({
         </SelectControl>
       </FilterField>
 
-      <FilterField label="매장">
+      <FilterField label="상태">
         <SelectControl
-          aria-label="매장 필터"
-          className={joinClassNames(
-            selectControlClassName,
-            unifiedControlClassName,
-          )}
-          onValueChange={(value) => updateFilters({ storeId: value })}
-          value={filters.storeId}
-        >
-          <option value="">전체 매장</option>
-          {stores.map((store) => (
-            <option key={store.id} value={store.id}>
-              {store.name}
-            </option>
-          ))}
-        </SelectControl>
-      </FilterField>
-
-      <FilterField label="처리 상태">
-        <SelectControl
-          aria-label="처리 상태 필터"
+          aria-label="미수금 상태 필터"
           className={joinClassNames(
             selectControlClassName,
             unifiedControlClassName,
           )}
           onValueChange={(value) =>
-            updateFilters({ status: value as SalesStatusFilterValue })
+            updateFilters({ status: value as "all" | ReceivableStatusValue })
           }
           value={filters.status}
         >
-          <option value="all">전체 기록</option>
-          <option value="COMPLETED">완료 판매</option>
-          <option value="CANCELED">취소 이력</option>
+          <option value="all">전체</option>
+          <option value="UNPAID">미납</option>
+          <option value="PARTIALLY_PAID">부분 수납</option>
+          <option value="PAID">완납</option>
         </SelectControl>
       </FilterField>
     </div>

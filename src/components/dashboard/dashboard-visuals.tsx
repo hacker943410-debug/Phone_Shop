@@ -9,11 +9,11 @@ import {
   type DashboardRecentSale,
   type DashboardStaffSummary,
   type DashboardStoreSummary,
-} from "@/lib/dashboard-reporting";
+} from "@/lib/dashboard-reporting-types";
 import { formatWon } from "@/lib/formatters";
 
 const chartFrameClassName =
-  "dashboard-reveal flex h-full min-h-0 flex-col overflow-hidden rounded-[1rem] border border-white/80 bg-white/80 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-sm";
+  "dashboard-reveal flex h-full min-h-0 flex-col overflow-hidden rounded-[1rem] border border-white/80 bg-white/80 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-sm";
 
 const chartPalette = {
   slate: {
@@ -97,7 +97,7 @@ function InteractiveLineChart({
   const [activeSeriesId, setActiveSeriesId] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState(Math.max(dates.length - 1, 0));
   const width = 560;
-  const height = 224;
+  const height = 192;
   const visibleSeries = activeSeriesId
     ? series.filter((item) => item.id === activeSeriesId)
     : series;
@@ -163,7 +163,7 @@ function InteractiveLineChart({
         </div>
       </div>
 
-      <div className="relative min-h-[12rem] flex-1">
+      <div className="relative min-h-[10.5rem] flex-1">
         <svg
           aria-hidden="true"
           className="h-full w-full overflow-visible"
@@ -283,7 +283,7 @@ export function StaffSummaryBarChart({ rows }: { rows: DashboardStaffSummary[] }
     return null;
   }
 
-  const visibleRows = rows.slice(0, 5);
+  const visibleRows = rows.slice(0, 4);
   const maxSalesAmount = Math.max(...visibleRows.map((row) => row.salesAmount), 1);
 
   return (
@@ -362,7 +362,7 @@ export function StorePerformanceChart({ rows }: { rows: DashboardStoreSummary[] 
     return null;
   }
 
-  const visibleRows = rows.slice(0, 4);
+  const visibleRows = rows.slice(0, 3);
   const maxSalesAmount = Math.max(...visibleRows.map((row) => row.salesAmount), 1);
 
   return (
@@ -477,7 +477,7 @@ export function PeriodFlowChart({ rows }: { rows: DashboardDailySummary[] }) {
 }
 
 export function RecentSalesChart({ rows }: { rows: DashboardRecentSale[] }) {
-  const visibleRows = rows.slice(0, 5);
+  const visibleRows = rows.slice(0, 4);
 
   if (visibleRows.length === 0) {
     return null;

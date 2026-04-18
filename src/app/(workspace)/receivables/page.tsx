@@ -6,7 +6,7 @@ import type {
   ReceivablesNotice,
 } from "@/components/workspace/receivables-types";
 import { getCurrentUser } from "@/lib/auth/dal";
-import { formatKstDate, parseKstDateInput } from "@/lib/date-utils";
+import { formatKstDate } from "@/lib/date-utils";
 import { createPagination, readPageNumber } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 
@@ -47,11 +47,9 @@ export default async function ReceivablesPage({
   searchParams: Promise<{
     q?: string | string[];
     customerId?: string | string[];
+    carrierId?: string | string[];
     saleId?: string | string[];
-    receivableId?: string | string[];
     status?: string | string[];
-    dateFrom?: string | string[];
-    dateTo?: string | string[];
     page?: string | string[];
     notice?: string | string[];
   }>;
@@ -65,20 +63,12 @@ export default async function ReceivablesPage({
   const rawSearchParams = await searchParams;
   const q = readSearchParam(rawSearchParams.q);
   const customerId = readSearchParam(rawSearchParams.customerId);
+  const carrierId = readSearchParam(rawSearchParams.carrierId);
   const saleId = readSearchParam(rawSearchParams.saleId);
-  const receivableId = readSearchParam(rawSearchParams.receivableId);
   const statusValue = readSearchParam(rawSearchParams.status) || "all";
   const requestedPage = readPageNumber(rawSearchParams.page);
   const noticeValue = readSearchParam(rawSearchParams.notice);
   const normalizedQuery = q.replace(/\D/g, "");
-
-  let dateFrom = readSearchParam(rawSearchParams.dateFrom);
-  let dateTo = readSearchParam(rawSearchParams.dateTo);
-
-  if (dateFrom && dateTo && dateFrom > dateTo) {
-    [dateFrom, dateTo] = [dateTo, dateFrom];
-  }
-
   const status = isReceivableStatusFilter(statusValue) ? statusValue : "all";
   const notice = isReceivablesNotice(noticeValue) ? noticeValue : null;
 
@@ -142,84 +132,83 @@ export default async function ReceivablesPage({
           saleId,
         }
       : {}),
+    ...(carrierId
+      ? {
+          sale: {
+            carrierId,
+          },
+        }
+      : {}),
     ...(status !== "all"
       ? {
           status,
-        }
-      : {}),
-    ...(dateFrom || dateTo
-      ? {
-          sale: {
-            saleDate: {
-              ...(dateFrom
-                ? {
-                    gte: parseKstDateInput(dateFrom, "start"),
-                  }
-                : {}),
-              ...(dateTo
-                ? {
-                    lte: parseKstDateInput(dateTo, "end"),
-                  }
-                : {}),
-            },
-          },
         }
       : {}),
   };
 
   const [
     customers,
+    carriers,
     filteredCount,
     totalCount,
     outstandingCount,
     partiallyPaidCount,
     paidCount,
     balanceAggregate,
-  ] =
-    await Promise.all([
-      prisma.customer.findMany({
-        where: {
-          isHidden: false,
+  ] = await Promise.all([
+    prisma.customer.findMany({
+      where: {
+        isHidden: false,
+      },
+      orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+      },
+    }),
+    prisma.carrier.findMany({
+      where: {
+        isActive: true,
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.receivable.count({
+      where,
+    }),
+    prisma.receivable.count(),
+    prisma.receivable.count({
+      where: {
+        balanceAmount: {
+          gt: 0,
         },
-        orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          phone: true,
+      },
+    }),
+    prisma.receivable.count({
+      where: {
+        status: "PARTIALLY_PAID",
+      },
+    }),
+    prisma.receivable.count({
+      where: {
+        status: "PAID",
+      },
+    }),
+    prisma.receivable.aggregate({
+      _sum: {
+        balanceAmount: true,
+      },
+      where: {
+        balanceAmount: {
+          gt: 0,
         },
-      }),
-      prisma.receivable.count({
-        where,
-      }),
-      prisma.receivable.count(),
-      prisma.receivable.count({
-        where: {
-          balanceAmount: {
-            gt: 0,
-          },
-        },
-      }),
-      prisma.receivable.count({
-        where: {
-          status: "PARTIALLY_PAID",
-        },
-      }),
-      prisma.receivable.count({
-        where: {
-          status: "PAID",
-        },
-      }),
-      prisma.receivable.aggregate({
-        _sum: {
-          balanceAmount: true,
-        },
-        where: {
-          balanceAmount: {
-            gt: 0,
-          },
-        },
-      }),
-    ]);
+      },
+    }),
+  ]);
 
   const pagination = createPagination(
     requestedPage,
@@ -243,6 +232,7 @@ export default async function ReceivablesPage({
         select: {
           id: true,
           saleDate: true,
+          carrierId: true,
           carrier: {
             select: {
               name: true,
@@ -256,6 +246,11 @@ export default async function ReceivablesPage({
           staff: {
             select: {
               displayName: true,
+            },
+          },
+          store: {
+            select: {
+              name: true,
             },
           },
         },
@@ -278,24 +273,19 @@ export default async function ReceivablesPage({
     },
   });
 
-  const selectedReceivableId = records.some((record) => record.id === receivableId)
-    ? receivableId
-    : (records[0]?.id ?? null);
-
   return (
     <ReceivablesOverview
+      carriers={carriers}
       currentUserName={currentUser.displayName}
-      defaultPaymentDate={formatKstDate(new Date())}
       customers={customers}
+      defaultPaymentDate={formatKstDate(new Date())}
       filters={{
         q,
         customerId,
+        carrierId,
         saleId,
         status,
-        dateFrom,
-        dateTo,
       }}
-      pagination={pagination}
       metrics={{
         totalCount,
         filteredCount,
@@ -305,7 +295,7 @@ export default async function ReceivablesPage({
         balanceAmount: balanceAggregate._sum.balanceAmount ?? 0,
       }}
       notice={notice}
-      selectedReceivableId={selectedReceivableId}
+      pagination={pagination}
       records={records.map((record) => {
         const paidAmount = record.payments
           .filter((payment) => payment.status === "COMPLETED")
@@ -315,10 +305,14 @@ export default async function ReceivablesPage({
           id: record.id,
           saleId: record.saleId,
           customerId: record.customerId,
+          carrierId: record.sale.carrierId,
           customerName: record.customer.name,
           customerPhone: record.customer.phone,
           saleDate: record.sale.saleDate,
+          carrierName: record.sale.carrier.name,
+          deviceModelName: record.sale.deviceModel.name,
           saleSummary: `${record.sale.carrier.name} ${record.sale.deviceModel.name}`,
+          storeName: record.sale.store?.name ?? null,
           staffName: record.sale.staff.displayName,
           originalAmount: record.originalAmount,
           paidAmount,

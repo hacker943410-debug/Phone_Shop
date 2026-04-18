@@ -1,12 +1,12 @@
 # PhoneShop Work Plan
 
-최종 갱신: 2026-04-15
+최종 갱신: 2026-04-18
 
 ## 현재 상태
 
 - 현재 작업 기준: `11단계. 운영 중 추가 요구사항 후속 패치`
-- 현재 활성 단계: `대시보드 / 판매관리 후속 패치 반영 후 세션 종료`
-- 현재 상태 요약: 디자인 리뉴얼 1차 완료 이후 운영 요구사항을 기준으로 대시보드, 공통 입력 컨트롤, 매장 축, 판매 관리 UX를 집중적으로 재정비했다. 오늘은 문서와 handoff를 남기고 종료하며, 다음 세션은 판매 등록 런처의 신규 고객 후속 연계와 잔여 QA부터 이어간다.
+- 현재 활성 단계: `대시보드 / 판매관리 후속 패치 QA 마감 직전`
+- 현재 상태 요약: `신규 고객 -> 고객 등록 -> 판매 등록` handoff와 매장/기간 drill-down 정리를 마쳤고, 커스텀 날짜/선택 컨트롤 lint 정리까지 끝냈다. 다음 세션은 Playwright를 다시 돌릴 수 있도록 Turbopack dev-server 문제를 정리하고 최종 QA를 닫는 순서로 이어간다.
 
 | Workstream | 상태 | 메모 |
 | --- | --- | --- |
@@ -15,7 +15,7 @@
 | C | 완료 | 대시보드 차트형 개편, 상세 모달, 매장 필터 도입 |
 | D | 완료 | 매장 축 / 개통 가능 규칙 / 기초정보·정책 연동 |
 | E | 대부분 완료 | 판매 관리 compact UI, 런처 모달, 자동 필터, 상세 모달, 페이지네이션 |
-| F | 진행 중 | 신규 고객 -> 판매 등록 후속 흐름, 메뉴별 잔여 QA |
+| F | 마감 직전 | 신규 고객 -> 판매 등록 후속 흐름 완료, 남은 것은 Playwright 재검증 |
 
 ## 기준 문서
 
@@ -202,9 +202,7 @@
 - [x] `pnpm playwright test tests/e2e/home.spec.ts`
 
 다음 세션 이어갈 항목:
-- [ ] 판매 등록 런처에서 `신규 고객` 선택 후 고객 등록 -> 판매 등록으로 이어지는 후속 흐름 연결
-- [ ] 대시보드 / 보고서 / 판매 목록의 매장 기준 상세 drill-down 최종 정리
-- [ ] 커스텀 날짜 선택기 / 선택 목록 박스 / 뒤로가기 재진입 메뉴별 QA 마감
+- [ ] Next 16 Turbopack Windows junction 오류를 정리하고 `pnpm playwright test tests/e2e/home.spec.ts` 재실행
 - [ ] 필요 시 배포 준비 문서와 외부 환경 연결 정리 재개
 
 ## 리뉴얼 구현 요약
@@ -286,3 +284,9 @@
 - 현재 문서는 2026-04-15 기준 대시보드 / 매장 축 / 판매 관리 후속 패치까지 반영한다.
 - 다음 작업은 `신규 고객` 선택 이후 판매 등록으로 이어지는 후속 흐름부터 시작한다.
 - 중복 계획 문서를 늘리기보다 이 문서와 [PROJECT_SETUP_REPORT.md](./PROJECT_SETUP_REPORT.md), [.planning/.continue-here.md](./.planning/.continue-here.md)를 우선 갱신한다.
+## 2026-04-18 Current Follow-up Snapshot
+
+- Workspace screens were pushed further toward a console-style layout with wider data surfaces and less explanatory copy.
+- Shared select/date popovers were moved onto independent layers and control heights were normalized.
+- Dashboard filters were expanded and customer management was rebuilt around auto-apply filters plus modal-driven detail flows.
+- The next recommended step is a broader cross-menu QA pass on the webpack dev server, then either final polish or Turbopack environment cleanup.

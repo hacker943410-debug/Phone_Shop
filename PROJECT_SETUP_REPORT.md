@@ -1,6 +1,6 @@
 # Project Setup Report
 
-최종 갱신: 2026-04-15
+최종 갱신: 2026-04-18
 
 ## 1. 현재 환경 요약
 
@@ -42,32 +42,25 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 - CSV 다운로드 / 인쇄용 보고서 출력
 
 아직 남아 있는 작업:
-- 판매 등록 런처의 `신규 고객` 선택 이후 후속 연계 흐름
-- 대시보드 / 보고서 / 판매 목록의 매장 기준 drill-down 세부 정리
-- 커스텀 날짜/선택 입력과 뒤로가기 상호작용의 메뉴별 QA
+- 커스텀 날짜/선택 입력과 뒤로가기 상호작용의 최종 E2E QA
+- Playwright 실행을 막고 있는 Next 16 Turbopack Windows junction 오류 정리
 - 배포 준비 문서와 외부 환경 연결 정리
 
 ## 4. 최근 검증 결과
 
-2026-04-15 기준 최근 통과:
-- `pnpm prisma generate`
-- `pnpm prisma migrate dev --name add_carrier_activation_rule`
-- `pnpm prisma migrate dev --name add_store_dimension`
-- `pnpm prisma db seed`
+2026-04-18 기준 최근 통과:
+- `pnpm lint`
 - `pnpm typecheck`
+- `pnpm vitest run src/lib/sales-url-state.test.ts`
 - `pnpm build`
-- `pnpm vitest run src/lib/activation-rules.test.ts src/lib/dashboard-reporting.test.ts src/components/dashboard/dashboard-overview.test.tsx src/components/workspace/workspace-nav.test.tsx src/app/api/reports/summary/route.test.ts src/app/actions/receivables.test.ts`
-- `pnpm playwright test tests/e2e/home.spec.ts`
 
 추가 확인:
-- 로컬 개발 서버 응답 확인: `http://localhost:3000` 상태코드 `200`
+- `pnpm playwright test tests/e2e/home.spec.ts`는 2026-04-18에 재시도했지만, 테스트 시작 전 Next 16 Turbopack이 `.next/dev/node_modules/better-sqlite3-*` junction을 다시 만들지 못해 실패했다 (`os error 145`).
 
 ## 5. 남은 우선순위
 
-1. 판매 등록 런처의 `신규 고객` 선택 이후 고객 등록 -> 판매 등록 연계 흐름 완성
-2. 대시보드 / 보고서 / 판매 관리의 매장 기준 상세 drill-down 정리
-3. 커스텀 날짜 선택기 / 선택 목록 박스 / 뒤로가기 재진입 QA 마감
-4. 배포 준비 문서 정리와 외부 환경 연결
+1. Next 16 Turbopack Windows junction 오류를 정리하고 `pnpm playwright test tests/e2e/home.spec.ts` 재실행
+2. 배포 준비 문서 정리와 외부 환경 연결
 
 ## 6. 외부 서비스 수동 작업
 
@@ -95,8 +88,8 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 
 - 분석 입력 문서: [PHONESHOP_ANALYSIS_REPORT.md](./PHONESHOP_ANALYSIS_REPORT.md)
 - 실행 기준 문서: [PHONESHOP_IMPROVEMENT_PLAN.md](./PHONESHOP_IMPROVEMENT_PLAN.md)
-- 2026-04-15 기준 실제 실행은 대시보드 / 판매 관리 / 매장 축 후속 패치까지 진행됐다.
-- 다음 개선 축은 `신규 고객 -> 판매 등록` 연계와 매장 기준 상세 drill-down 정리다.
+- 2026-04-18 기준 실제 실행은 `신규 고객 -> 고객 등록 -> 판매 등록` 연계와 매장/기간 drill-down 정리까지 반영됐다.
+- 다음 개선 축은 Playwright 재검증을 막는 Turbopack dev-server 문제 해소와 배포 준비 문서 정리다.
 
 ## 7. 현재 라우트 상태
 
@@ -173,3 +166,25 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 - `pnpm typecheck`
 - `pnpm build`
 - `pnpm playwright test tests/e2e/home.spec.ts`
+
+### 2026-04-18 판매 handoff / drill-down / QA 정리
+
+- 판매 등록 런처의 `신규 고객` 분기를 `/customers?returnTo=/sales/new` 기반 handoff 흐름으로 연결
+- 고객 저장 이후 `/sales/new?customerId=...`로 복귀하도록 연결하고 판매 등록 화면에서 고객을 선선택하도록 보강
+- 판매 목록 URL 상태에 `storeId`, `dateFrom`, `dateTo`를 포함해 필터, 페이지네이션, 담당자 drill-down, 고객 화면 왕복에서 문맥이 유지되도록 정리
+- 보고서 화면에서 현재 기간/매장 기준 판매 목록 drill-down과 일자별 판매 drill-down 링크를 추가
+- 커스텀 날짜/선택 컨트롤과 대시보드/판매 필터 바를 리팩터링해 hook-effect lint 경고를 제거
+- 검증:
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm vitest run src/lib/sales-url-state.test.ts`
+- `pnpm build`
+- `pnpm playwright test tests/e2e/home.spec.ts`는 Turbopack Windows junction 오류로 웹서버 기동 단계에서 실패
+### 2026-04-18 Console Layout And Customer Management Follow-up
+
+- Refined the workspace toward a wider console layout with less explanatory copy and more table-first surfaces.
+- Added shared layered popovers for custom select/date controls so expanded lists are no longer hidden behind lower panels.
+- Unified input and select trigger heights across the workspace.
+- Added dashboard top filters for store and period presets and tightened date picker / modal placement behavior.
+- Rebuilt `/customers` with auto-apply filters, tighter filter widths, icon actions, and modal-based customer detail / sales / receivable views.
+- Manual verification continued on the webpack dev server while the Turbopack Windows junction issue remains unresolved.
