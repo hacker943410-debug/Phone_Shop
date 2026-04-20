@@ -256,7 +256,7 @@ function ActionIconButton({
   return (
     <button
       aria-label={label}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700 transition duration-150 hover:-translate-y-px hover:border-teal-300 hover:bg-teal-100"
+      className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700 transition duration-150 hover:-translate-y-px hover:border-teal-300 hover:bg-teal-100"
       onClick={onClick}
       title={label}
       type="button"

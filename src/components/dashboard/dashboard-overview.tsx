@@ -17,6 +17,7 @@ import {
   secondaryButtonClassName,
 } from "@/components/workspace/ui-classnames";
 import {
+  CarrierInlineLabel,
   CarrierTonePill,
   TonePill,
 } from "@/components/workspace/workspace-primitives";
@@ -382,9 +383,10 @@ function OperationsOverview({
                             <p className="text-sm font-semibold text-slate-950">
                               {row.customerName}
                             </p>
-                            <p className="mt-1 text-[0.76rem] text-slate-500">
-                              {row.carrierName} / {row.deviceModelName}
-                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.76rem] text-slate-500">
+                              <CarrierInlineLabel label={row.carrierName} />
+                              <span>{row.deviceModelName}</span>
+                            </div>
                           </div>
                           <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[0.74rem] font-semibold text-rose-700">
                             {formatWon(row.balanceAmount)}
@@ -413,9 +415,10 @@ function OperationsOverview({
                       {formatWon(row.balanceAmount)}
                     </span>
                   </div>
-                  <p className="mt-1 text-[0.76rem] text-slate-500">
-                    {row.carrierName} / {row.deviceModelName}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.76rem] text-slate-500">
+                    <CarrierInlineLabel label={row.carrierName} />
+                    <span>{row.deviceModelName}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -609,9 +612,11 @@ function DashboardAnalyticsDeck({ report }: { report: DashboardReportData }) {
                       <p className="truncate text-sm font-semibold text-slate-950">
                         {row.customerName}
                       </p>
-                      <p className="mt-1 truncate text-[0.76rem] text-slate-500">
-                        {row.carrierName} {row.deviceModelName} / {row.saleDate}
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.76rem] text-slate-500">
+                        <CarrierInlineLabel label={row.carrierName} />
+                        <span className="truncate">{row.deviceModelName}</span>
+                        <span>/ {row.saleDate}</span>
+                      </div>
                       <p className="mt-1 text-[0.74rem] text-slate-500">
                         담당자 {row.staffName}
                       </p>
@@ -800,9 +805,11 @@ export function DashboardOverview({ report }: DashboardOverviewProps) {
                             <p className="truncate text-sm font-semibold text-slate-950">
                               {row.customerName}
                             </p>
-                            <p className="mt-1 truncate text-[0.76rem] text-slate-500">
-                              {row.carrierName} {row.deviceModelName} / {row.saleDate}
-                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.76rem] text-slate-500">
+                              <CarrierInlineLabel label={row.carrierName} />
+                              <span className="truncate">{row.deviceModelName}</span>
+                              <span>/ {row.saleDate}</span>
+                            </div>
                             <p className="mt-1 text-[0.74rem] text-slate-500">
                               담당자 {row.staffName}
                             </p>

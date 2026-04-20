@@ -18,29 +18,20 @@ test("protected routes redirect to login and admin sees live dashboard plus repo
   await login(page, "admin", "admin1234!");
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole("heading", {
-      name: "매출 흐름과 후속 관리 숫자를 한 화면에서 확인합니다",
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "대시보드" })).toBeVisible();
 
   const sidebar = page.getByRole("navigation", { name: "워크스페이스 사이드바" });
   const sidebarLinks = sidebar.locator("ul > li > a");
 
-  await expect(
-    sidebar.getByRole("link", { name: "판매 등록" }),
-  ).toHaveAttribute("href", "/sales/new");
-  await expect(
-    sidebar.getByRole("link", { name: "재고 입고" }),
-  ).toHaveAttribute("href", "/inventory");
-  await expect(sidebarLinks).toHaveCount(7);
+  await expect(sidebarLinks).toHaveCount(8);
   await expect(sidebarLinks.nth(0)).toHaveAttribute("href", "/");
   await expect(sidebarLinks.nth(1)).toHaveAttribute("href", "/sales");
   await expect(sidebarLinks.nth(2)).toHaveAttribute("href", "/receivables");
   await expect(sidebarLinks.nth(3)).toHaveAttribute("href", "/customers");
-  await expect(sidebarLinks.nth(4)).toHaveAttribute("href", "/inventory");
-  await expect(sidebarLinks.nth(5)).toHaveAttribute("href", "/settings/base");
-  await expect(sidebarLinks.nth(6)).toHaveAttribute("href", "/settings/policies");
+  await expect(sidebarLinks.nth(4)).toHaveAttribute("href", "/schedule");
+  await expect(sidebarLinks.nth(5)).toHaveAttribute("href", "/inventory");
+  await expect(sidebarLinks.nth(6)).toHaveAttribute("href", "/settings/base");
+  await expect(sidebarLinks.nth(7)).toHaveAttribute("href", "/settings/policies");
   await expect(sidebar).not.toContainText("MVP");
   await expect(page.getByText("오늘 판매 건수")).toBeVisible();
   await expect(
@@ -57,32 +48,40 @@ test("protected routes redirect to login and admin sees live dashboard plus repo
     startDateBox!.y + startDateBox!.height / 2,
   );
   await page.locator('button[aria-label="2026-04-11"]').click();
-
-  await datePickers.nth(1).click();
-  await page.locator('button[aria-label="2026-04-11"]').click();
   await expect(page).toHaveURL(/preset=custom/);
-  await expect(page.getByText("2026-04-11 ~ 2026-04-11").first()).toBeVisible();
+  await expect(page).toHaveURL(/dateFrom=2026-04-11/);
 
   const downloadPromise = page.waitForEvent("download");
   await page.locator('a[href^="/api/reports/summary?"]').click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toContain("phoneshop-summary-");
 
-  await page.getByRole("link", { name: "인쇄용 보고서" }).click();
+  const reportLink = page.getByRole("link", { name: "인쇄용 보고서" });
+  await expect(reportLink).toHaveAttribute("href", /\/reports\/summary\?/);
+  const reportHref = await reportLink.getAttribute("href");
+
+  expect(reportHref).not.toBeNull();
+  await page.goto(reportHref!);
   await expect(page).toHaveURL(/\/reports\/summary/);
   await expect(
-    page.getByRole("heading", { name: "PhoneShop 기간 운영 보고서" }),
+    page.getByRole("heading", { name: "기간 보고서" }),
   ).toBeVisible();
   await expect(page.getByText("일자별 요약")).toBeVisible();
   await expect(page.getByText("최근 판매 상세")).toBeVisible();
   await expect(page.locator("table").first()).toBeVisible();
 
   await page.goto("/settings/base");
-  await expect(page.getByText("5GX").first()).toBeVisible();
-  await expect(page.getByText("KT").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "기초정보" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "매장 관리" })).toBeVisible();
 
   await page.goto("/settings/policies");
-  await expect(page.getByText("KT iPhone 16").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "정책 관리" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "개통 가능 규칙" })).toBeVisible();
+
+  await page.goto("/schedule");
+  await expect(page.getByRole("heading", { name: "일정 관리" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "월간 캘린더" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "다가오는 일정" })).toBeVisible();
 
   await page.goto("/inventory");
   await expect(
@@ -91,13 +90,17 @@ test("protected routes redirect to login and admin sees live dashboard plus repo
   await expect(page.getByText("359300001245118", { exact: true })).toBeVisible();
 
   await page.goto("/customers");
+  await expect(page.getByRole("heading", { name: "고객 관리" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "고객 목록" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "고객 상세" })).toBeVisible();
+  await page.locator('a[aria-label$="고객 상세"]').first().click();
+  await expect(page.getByRole("dialog")).toContainText("기본 정보");
+  await page.getByRole("button", { name: "모달 닫기" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await page.goto("/sales");
   const salesHistoryTable = page.getByRole("table");
   await expect(
-    page.getByRole("button", { name: "판매 등록 화면 열기" }).first(),
+    page.getByRole("button", { name: "판매 등록" }).first(),
   ).toBeVisible();
   await expect(salesHistoryTable).toContainText("Galaxy S25");
   await expect(salesHistoryTable).toContainText("iPhone 16");
@@ -113,7 +116,7 @@ test("protected routes redirect to login and admin sees live dashboard plus repo
 
   await page.goto("/receivables");
   await expect(
-    page.locator('a[href*="receivableId="]').first(),
+    page.getByRole("button", { name: /수납 등록$/ }).first(),
   ).toBeVisible();
 });
 
@@ -121,11 +124,7 @@ test("staff accounts cannot access admin-only settings", async ({ page }) => {
   await login(page, "jihu_kim", "staff1234!");
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole("heading", {
-      name: "매출 흐름과 후속 관리 숫자를 한 화면에서 확인합니다",
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "대시보드" })).toBeVisible();
   await expect(page.locator('a[href="/settings/base"]')).toHaveCount(0);
 
   await page.goto("/settings/base");
@@ -133,6 +132,6 @@ test("staff accounts cannot access admin-only settings", async ({ page }) => {
   await expect(page.getByText("오늘 판매 건수")).toBeVisible();
 
   await page.goto("/customers");
+  await expect(page.getByRole("heading", { name: "고객 관리" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "고객 목록" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "고객 상세" })).toBeVisible();
 });

@@ -32,7 +32,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 dev-server*.log
-.tmp-phoneshop-dev.log
+.tmp-phoneshop-dev*.log
+.tmp-phoneshop-dev*.err.log
 __pycache__/
 *.pyc
 .playwright-mcp/

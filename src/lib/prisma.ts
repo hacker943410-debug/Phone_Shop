@@ -10,12 +10,37 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+function createPrismaClient() {
+  return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
+}
+
+function hasRequiredDelegates(
+  client: PrismaClient | undefined,
+): client is PrismaClient {
+  if (!client) {
+    return false;
+  }
+
+  // In dev, a globally cached client can survive schema changes and miss new delegates
+  // until the process is restarted. Rebuild it when the current schema's delegate is absent.
+  return typeof (client as PrismaClient & { manualSchedule?: { findMany?: unknown } })
+    .manualSchedule?.findMany === "function";
+}
+
+function getPrismaClient() {
+  const cachedPrisma = globalForPrisma.prisma;
+
+  if (hasRequiredDelegates(cachedPrisma)) {
+    return cachedPrisma;
+  }
+
+  return createPrismaClient();
+}
+
+export const prisma: PrismaClient = getPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;

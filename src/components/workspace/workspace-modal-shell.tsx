@@ -1,9 +1,13 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useId, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import {
   joinClassNames,
   secondaryButtonClassName,
 } from "@/components/workspace/ui-classnames";
+import { useModalAccessibility } from "@/components/workspace/use-modal-accessibility";
 
 function CloseIcon() {
   return (
@@ -36,26 +40,50 @@ export function WorkspaceModalShell({
   subtitle,
   title,
 }: WorkspaceModalShellProps) {
-  return (
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
+  useModalAccessibility({
+    containerRef: panelRef,
+    isOpen: mounted,
+    onClose,
+  });
+
+  if (!mounted) {
+    return null;
+  }
+
+  return createPortal(
     <div
       className="dashboard-dialog-backdrop fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto overscroll-y-contain bg-[rgba(15,23,42,0.42)] px-4 py-3 sm:px-6 sm:py-6"
       onClick={onClose}
     >
       <div
+        aria-labelledby={titleId}
         aria-modal="true"
         className={joinClassNames(
           "dashboard-dialog-panel flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-[1.7rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] shadow-[0_42px_90px_-34px_rgba(15,23,42,0.5)] backdrop-blur sm:max-h-[calc(100dvh-3rem)]",
           maxWidthClassName,
         )}
         onClick={(event) => event.stopPropagation()}
+        ref={panelRef}
         role="dialog"
+        tabIndex={-1}
       >
         <div className="flex items-start justify-between gap-4 border-b border-stone-200/90 px-5 py-4 sm:px-6">
           <div className="space-y-1.5">
             <p className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-amber-700">
               {subtitle}
             </p>
-            <h3 className="text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950">
+            <h3
+              className="text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950"
+              id={titleId}
+            >
               {title}
             </h3>
           </div>
@@ -80,6 +108,7 @@ export function WorkspaceModalShell({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

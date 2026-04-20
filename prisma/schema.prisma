@@ -68,19 +68,26 @@ enum PaymentStatus {
   CANCELED
 }
 
+enum ManualScheduleStatus {
+  OPEN
+  DONE
+  CANCELED
+}
+
 model User {
-  id             String          @id @default(cuid())
-  username       String          @unique
-  displayName    String
-  passwordHash   String?
-  role           UserRole
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  canceledPayments Payment[]     @relation("PaymentCanceledBy")
-  inventoryItems InventoryItem[] @relation("InventoryAssignee")
-  payments       Payment[]       @relation("PaymentStaff")
-  sales          Sale[]          @relation("SalesStaff")
+  id                  String                 @id @default(cuid())
+  username            String                 @unique
+  displayName         String
+  passwordHash        String?
+  role                UserRole
+  isActive            Boolean                @default(true)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  canceledPayments    Payment[]              @relation("PaymentCanceledBy")
+  createdSchedules    ManualSchedule[]       @relation("ManualScheduleCreatedBy")
+  inventoryItems      InventoryItem[]        @relation("InventoryAssignee")
+  payments            Payment[]              @relation("PaymentStaff")
+  sales               Sale[]                 @relation("SalesStaff")
   staffCommissionPolicies StaffCommissionPolicy[] @relation("StaffCommissionPolicyStaff")
 
   @@index([role, isActive])
@@ -218,18 +225,19 @@ model InventoryItem {
 }
 
 model Customer {
-  id               String       @id @default(cuid())
+  id               String            @id @default(cuid())
   name             String
   phone            String
-  normalizedPhone  String       @unique
+  normalizedPhone  String            @unique
   birthDate        DateTime?
   address          String?
   memo             String?
   currentCarrierId String?
-  isHidden         Boolean      @default(false)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  currentCarrier   Carrier?     @relation("CustomerCurrentCarrier", fields: [currentCarrierId], references: [id], onDelete: SetNull)
+  isHidden         Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  currentCarrier   Carrier?          @relation("CustomerCurrentCarrier", fields: [currentCarrierId], references: [id], onDelete: SetNull)
+  manualSchedules  ManualSchedule[]
   receivables      Receivable[]
   sales            Sale[]
 
@@ -373,6 +381,7 @@ model Sale {
   customer                    Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   deviceModel                 DeviceModel       @relation(fields: [deviceModelId], references: [id], onDelete: Restrict)
   inventoryItem               InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  manualSchedules             ManualSchedule[]
   payments                    Payment[]
   ratePlan                    RatePlan?         @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
   receivable                  Receivable?
@@ -442,4 +451,24 @@ model Payment {
   @@index([storeId, paymentDate])
   @@index([paymentDate, status])
   @@index([canceledById])
+}
+
+model ManualSchedule {
+  id           String               @id @default(cuid())
+  title        String
+  scheduledDate DateTime
+  status       ManualScheduleStatus @default(OPEN)
+  customerId   String?
+  saleId       String?
+  memo         String?
+  createdById  String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  createdBy    User                 @relation("ManualScheduleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  customer     Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  sale         Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@index([scheduledDate, status])
+  @@index([customerId, scheduledDate])
+  @@index([createdById, scheduledDate])
 }

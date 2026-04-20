@@ -25,6 +25,7 @@ import {
 import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 import {
   ActionChip,
+  CarrierInlineLabel,
   MetricCard,
   PageIntro,
   Panel,
@@ -758,9 +759,12 @@ export function InventoryOverview({
                   <tr key={item.id} className="hover:bg-stone-50/70">
                     <td className="px-4 py-3.5 align-top">
                       <div className="space-y-1">
-                        <p className="font-semibold text-slate-950">
-                          {item.carrierName} / {getItemModelLabel(item)}
-                        </p>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <CarrierInlineLabel className="shrink-0" label={item.carrierName} />
+                          <p className="min-w-0 truncate font-semibold text-slate-950">
+                            {getItemModelLabel(item)}
+                          </p>
+                        </div>
                         <p className="text-xs text-slate-500">
                           {item.storeName} / {item.color} / {item.capacity}
                         </p>
@@ -847,8 +851,9 @@ export function InventoryOverview({
           <div className="space-y-4">
             <article className={surfaceClassName}>
               <div className="flex flex-wrap items-center gap-2">
+                <CarrierInlineLabel label={activeItem.carrierName} />
                 <p className="text-lg font-semibold text-slate-950">
-                  {activeItem.carrierName} / {getItemModelLabel(activeItem)}
+                  {getItemModelLabel(activeItem)}
                 </p>
                 <TonePill
                   label={getStatusLabel(activeItem.status)}

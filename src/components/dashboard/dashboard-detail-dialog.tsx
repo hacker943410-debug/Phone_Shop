@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import {
   joinClassNames,
   secondaryButtonClassName,
 } from "@/components/workspace/ui-classnames";
+import { useModalAccessibility } from "@/components/workspace/use-modal-accessibility";
 
 function ExpandIcon() {
   return (
@@ -51,24 +53,13 @@ export function DashboardDetailDialog({
   const [open, setOpen] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
+  useModalAccessibility({
+    containerRef: panelRef,
+    isOpen: open,
+    onClose: () => setOpen(false),
+  });
 
   return (
     <>
@@ -86,56 +77,61 @@ export function DashboardDetailDialog({
         {triggerLabel}
       </button>
 
-      {open ? (
-        <div
-          className="dashboard-dialog-backdrop fixed inset-0 z-[70] flex items-end justify-center bg-[rgba(15,23,42,0.42)] px-4 py-6 sm:items-center"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            aria-describedby={description ? descriptionId : undefined}
-            aria-labelledby={titleId}
-            aria-modal="true"
-            className={joinClassNames(
-              "dashboard-dialog-panel flex max-h-[min(82vh,48rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[1.6rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] shadow-[0_42px_90px_-34px_rgba(15,23,42,0.5)] backdrop-blur",
-              panelClassName,
-            )}
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-stone-200/90 px-5 py-4 sm:px-6">
-              <div className="space-y-1.5">
-                <p
-                  className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-blue-700"
-                  id={titleId}
-                >
-                  {title}
-                </p>
-                {description ? (
-                  <p className="text-sm leading-6 text-slate-600" id={descriptionId}>
-                    {description}
-                  </p>
-                ) : null}
-              </div>
-
-              <button
-                aria-label="모달 닫기"
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="dashboard-dialog-backdrop fixed inset-0 z-[70] flex items-end justify-center bg-[rgba(15,23,42,0.42)] px-4 py-6 sm:items-center"
+              onClick={() => setOpen(false)}
+            >
+              <div
+                aria-describedby={description ? descriptionId : undefined}
+                aria-labelledby={titleId}
+                aria-modal="true"
                 className={joinClassNames(
-                  `${secondaryButtonClassName} h-9 w-9 px-0`,
-                  "rounded-full border-stone-200 bg-white text-slate-700",
+                  "dashboard-dialog-panel flex max-h-[min(82vh,48rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[1.6rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] shadow-[0_42px_90px_-34px_rgba(15,23,42,0.5)] backdrop-blur",
+                  panelClassName,
                 )}
-                onClick={() => setOpen(false)}
-                type="button"
+                onClick={(event) => event.stopPropagation()}
+                ref={panelRef}
+                role="dialog"
+                tabIndex={-1}
               >
-                <CloseIcon />
-              </button>
-            </div>
+                <div className="flex items-start justify-between gap-4 border-b border-stone-200/90 px-5 py-4 sm:px-6">
+                  <div className="space-y-1.5">
+                    <p
+                      className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-blue-700"
+                      id={titleId}
+                    >
+                      {title}
+                    </p>
+                    {description ? (
+                      <p className="text-sm leading-6 text-slate-600" id={descriptionId}>
+                        {description}
+                      </p>
+                    ) : null}
+                  </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-              {children}
-            </div>
-          </div>
-        </div>
-      ) : null}
+                  <button
+                    aria-label="모달 닫기"
+                    className={joinClassNames(
+                      `${secondaryButtonClassName} h-9 w-9 px-0`,
+                      "rounded-full border-stone-200 bg-white text-slate-700",
+                    )}
+                    onClick={() => setOpen(false)}
+                    type="button"
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                  {children}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

@@ -1,17 +1,17 @@
 # Project Setup Report
 
-최종 갱신: 2026-04-18
+최종 갱신: 2026-04-20
 
 ## 1. 현재 환경 요약
 
-- 작업 경로: `C:\Project\PhoneShop`
+- 작업 경로: `C:\Projects\Active\Phone_Shop`
 - 런타임: `Node.js` + `Next.js 16 App Router`
 - 패키지 매니저: `pnpm`
 - 데이터베이스: `SQLite` (`prisma/dev.db`)
 - ORM: `Prisma 7`
 - 인증: credentials + 서명 세션 쿠키
 - 테스트: `Vitest` + `Playwright`
-- 로컬 개발 서버: `http://localhost:3000`에서 `node` 프로세스로 실행 중
+- 로컬 개발 서버: 최신 검증은 `next dev --webpack` 외부 재사용 서버(`http://localhost:3101`) 기준으로 확인
 
 ## 2. 현재 동작하는 기능
 
@@ -26,10 +26,12 @@
 - 대시보드: 기간/매장 필터, KPI, 차트, 운영 체크, 상세 모달, 매장별 매출 실적
 - 보고서: 인쇄용 보고서 + CSV 다운로드 + 매장 필터 연동
 - 공통 입력 UX: 커스텀 날짜 선택기 / 선택 목록 박스 / 목록 페이지네이션
+- 일정 관리: `/schedule` 메뉴 / 월간 캘린더 / 우측 요약 패널 / 자동·수동 일정 집계 / 수동 일정 CRUD / no-key 공휴일 fallback
+- 공통 모달 UX: portal 기반 레이어링, body scroll lock, focus trap, focus restore
 
 ## 3. 현재 구현 상태 판단
 
-MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구사항 후속 패치`를 통해 운영 화면 사용성을 빠르게 다듬는 단계다.
+MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구사항 후속 패치`에서 일정 관리 CRUD와 검증 안정화까지 마무리한 상태다.
 
 현재 바로 사용할 수 있는 흐름:
 - 로그인 후 역할별 워크스페이스 진입
@@ -42,25 +44,33 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 - CSV 다운로드 / 인쇄용 보고서 출력
 
 아직 남아 있는 작업:
-- 커스텀 날짜/선택 입력과 뒤로가기 상호작용의 최종 E2E QA
-- Playwright 실행을 막고 있는 Next 16 Turbopack Windows junction 오류 정리
 - 배포 준비 문서와 외부 환경 연결 정리
 
 ## 4. 최근 검증 결과
 
-2026-04-18 기준 최근 통과:
+2026-04-20 기준 최근 통과:
+- `pnpm prisma migrate dev --name add_manual_schedule`
+- `pnpm prisma generate`
+- `pnpm prisma db seed`
 - `pnpm lint`
 - `pnpm typecheck`
-- `pnpm vitest run src/lib/sales-url-state.test.ts`
+- `pnpm vitest run src/lib/holidays.test.ts`
 - `pnpm build`
+- `pnpm vitest run src/lib/schedule.test.ts`
+- `pnpm vitest run src/app/actions/schedules.test.ts`
+- `pnpm vitest run src/components/workspace/workspace-nav.test.tsx`
+- `pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts`
+- `PLAYWRIGHT_BASE_URL=http://localhost:3101 pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts`
 
 추가 확인:
-- `pnpm playwright test tests/e2e/home.spec.ts`는 2026-04-18에 재시도했지만, 테스트 시작 전 Next 16 Turbopack이 `.next/dev/node_modules/better-sqlite3-*` junction을 다시 만들지 못해 실패했다 (`os error 145`).
+- no-key 공휴일 공개 API는 `/schedule?month=2026-05` 기준 `노동절`, `어린이날`, `부처님 오신 날`, `대체공휴일(부처님 오신 날)`이 실제 화면에 노출되는 것을 확인했다.
+- `pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts`가 `pnpm dev` self-start 경로에서도 통과해, 기존 Turbopack Windows junction 오류는 현재 상태에서 재현되지 않았다.
+- 외부 webpack dev server를 `PLAYWRIGHT_BASE_URL`로 재사용할 때는 `playwright.config.ts`에서 `workers=1`로 직렬 검증하도록 조정했다.
+- 외부 webpack dev server 재사용 모드는 공유 SQLite 검증 안정화용 보조 경로로 유지한다.
 
 ## 5. 남은 우선순위
 
-1. Next 16 Turbopack Windows junction 오류를 정리하고 `pnpm playwright test tests/e2e/home.spec.ts` 재실행
-2. 배포 준비 문서 정리와 외부 환경 연결
+1. 배포 준비 문서 정리와 외부 환경 연결
 
 ## 6. 외부 서비스 수동 작업
 
@@ -88,14 +98,15 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 
 - 분석 입력 문서: [PHONESHOP_ANALYSIS_REPORT.md](./PHONESHOP_ANALYSIS_REPORT.md)
 - 실행 기준 문서: [PHONESHOP_IMPROVEMENT_PLAN.md](./PHONESHOP_IMPROVEMENT_PLAN.md)
-- 2026-04-18 기준 실제 실행은 `신규 고객 -> 고객 등록 -> 판매 등록` 연계와 매장/기간 drill-down 정리까지 반영됐다.
-- 다음 개선 축은 Playwright 재검증을 막는 Turbopack dev-server 문제 해소와 배포 준비 문서 정리다.
+- 2026-04-20 기준 실제 실행은 `신규 고객 -> 고객 등록 -> 판매 등록` 연계, 매장/기간 drill-down, 일정 관리 데이터 기초 계층, 모달 접근성 회귀 정리까지 반영됐다.
+- 다음 개선 축은 배포 준비 문서 정리와 외부 환경 연결이다.
 
 ## 7. 현재 라우트 상태
 
 - `/` 대시보드: 기간/매장 필터, KPI, 차트, 운영 체크, 상세 모달
 - `/inventory` 재고 관리
 - `/customers` 고객 관리
+- `/schedule` 일정 관리
 - `/sales` 판매 관리
 - `/sales/new` 판매 등록 위저드
 - `/receivables` 미수금 관리
@@ -179,7 +190,7 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 - `pnpm typecheck`
 - `pnpm vitest run src/lib/sales-url-state.test.ts`
 - `pnpm build`
-- `pnpm playwright test tests/e2e/home.spec.ts`는 Turbopack Windows junction 오류로 웹서버 기동 단계에서 실패
+- `pnpm playwright test tests/e2e/home.spec.ts`는 당시 Turbopack Windows junction 오류로 웹서버 기동 단계에서 실패
 ### 2026-04-18 Console Layout And Customer Management Follow-up
 
 - Refined the workspace toward a wider console layout with less explanatory copy and more table-first surfaces.
@@ -187,4 +198,31 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 - Unified input and select trigger heights across the workspace.
 - Added dashboard top filters for store and period presets and tightened date picker / modal placement behavior.
 - Rebuilt `/customers` with auto-apply filters, tighter filter widths, icon actions, and modal-based customer detail / sales / receivable views.
-- Manual verification continued on the webpack dev server while the Turbopack Windows junction issue remains unresolved.
+- Manual verification continued on the webpack dev server while the Turbopack issue was still unresolved at that point.
+
+### 2026-04-20 Schedule Scaffold And Modal Accessibility Follow-up
+
+- Added the top-level `/schedule` route and a first-pass schedule overview scaffold to anchor the new calendar domain.
+- Introduced `useModalAccessibility` and applied portal-backed modal behavior to workspace dialogs, dashboard detail dialogs, sales detail modals, and receivable modals.
+- Updated `tests/e2e/home.spec.ts` for the current console-style navigation, schedule menu, customer detail modal flow, and receivables modal actions.
+- Verified `tests/e2e/home.spec.ts` and `tests/e2e/modal-a11y.spec.ts` against the existing webpack dev server via `PLAYWRIGHT_BASE_URL=http://localhost:3000`.
+
+### 2026-04-20 Schedule Data Foundation And Verification
+
+- Added the `ManualSchedule` Prisma schema, migration, and seed fixtures so schedule-specific data now exists in the local DB.
+- Implemented `src/lib/holidays.ts`, `src/lib/schedule.ts`, `src/app/(workspace)/schedule/schedule-page-data.ts`, and the `/schedule` overview so monthly cards, calendar cells, and right-side summaries aggregate manual schedules, automatic events, and holiday fallback data.
+- Regenerated Prisma client and refreshed the webpack dev server so the new `manualSchedule` delegate loads correctly during local runtime.
+- Updated `tests/e2e/home.spec.ts` expectations for the current report and schedule UI, then revalidated `home` and `modal-a11y` on `http://localhost:3000`.
+
+### 2026-04-20 Schedule CRUD And External Dev-Server Verification Stabilization
+
+- Completed manual schedule create/update/delete flows with `src/app/actions/schedules.ts` and `src/components/workspace/schedule-upsert-dialog.tsx`, including customer/sale consistency checks.
+- Added `src/app/actions/schedules.test.ts` and `tests/e2e/schedule.spec.ts` so schedule CRUD now has focused unit and E2E coverage.
+- Hardened `src/lib/prisma.ts` so a dev-session cached Prisma client is rebuilt when the generated client now exposes `manualSchedule`.
+- Updated `playwright.config.ts` so `PLAYWRIGHT_BASE_URL` reuse mode runs serially against a shared webpack dev server and SQLite DB, then revalidated `home`, `modal-a11y`, and `schedule` on `http://localhost:3101`.
+
+### 2026-04-20 No-Key Holiday Verification And Direct Self-Start Recheck
+
+- Replaced the keyed holiday dependency with no-key public sources and confirmed `/schedule?month=2026-05` renders live Korean holidays from the hosted public feed.
+- Added `src/lib/holidays.test.ts` for hosted source parsing, fallback parsing, year-cache reuse, and concurrent failure handling.
+- Re-ran `pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts` without `PLAYWRIGHT_BASE_URL`; the direct `pnpm dev` self-start path passed again on the current machine state.

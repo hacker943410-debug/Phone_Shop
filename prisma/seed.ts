@@ -10,6 +10,7 @@ import {
   DiscountMethod,
   DiscountTarget,
   InventoryStatus,
+  ManualScheduleStatus,
   PaymentMethod,
   PaymentStatus,
   ReceivableStatus,
@@ -31,6 +32,7 @@ function at(dateTime: string) {
 
 async function main() {
   await prisma.$transaction([
+    prisma.manualSchedule.deleteMany(),
     prisma.saleAddOnService.deleteMany(),
     prisma.payment.deleteMany(),
     prisma.receivable.deleteMany(),
@@ -854,6 +856,49 @@ async function main() {
         memo: "중복으로 잘못 등록된 현금 수납",
         canceledAt: at("2026-04-12T11:40:00+09:00"),
         cancellationReason: "중복 입력 정정",
+      },
+    ],
+  });
+
+  await prisma.manualSchedule.createMany({
+    data: [
+      {
+        id: "manual-schedule-kim-followup",
+        title: "김서현 잔금 재안내",
+        scheduledDate: at("2026-04-21T14:00:00+09:00"),
+        status: ManualScheduleStatus.OPEN,
+        customerId: "customer-kim-seohyun",
+        saleId: "sale-20260411-kim",
+        memo: "부분 수납 후 잔액 18만원 재안내 및 방문 일정 확인",
+        createdById: "user-park-sy",
+      },
+      {
+        id: "manual-schedule-oh-visit",
+        title: "오시온 방문 약속 확인",
+        scheduledDate: at("2026-04-22T16:30:00+09:00"),
+        status: ManualScheduleStatus.OPEN,
+        customerId: "customer-oh-sion",
+        saleId: "sale-20260408-oh",
+        memo: "미수금 수납 가능 시간 재확인",
+        createdById: "user-kim-jh",
+      },
+      {
+        id: "manual-schedule-team-brief",
+        title: "주간 매장 브리핑",
+        scheduledDate: at("2026-04-25T09:30:00+09:00"),
+        status: ManualScheduleStatus.DONE,
+        memo: "강남점/본점 4월 마지막 주 판매 현황 공유",
+        createdById: "user-admin",
+      },
+      {
+        id: "manual-schedule-jung-canceled",
+        title: "정하은 보상정책 재안내",
+        scheduledDate: at("2026-04-29T11:00:00+09:00"),
+        status: ManualScheduleStatus.CANCELED,
+        customerId: "customer-jung-haeun",
+        saleId: "sale-20260409-jung",
+        memo: "고객 요청으로 다음 달 초로 연기",
+        createdById: "user-lee-dy",
       },
     ],
   });

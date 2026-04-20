@@ -10,6 +10,7 @@
 | [README.md](./README.md) | 실행 방법과 기본 소개 | 첫 진입점 |
 | [PROJECT_DOCS.md](./PROJECT_DOCS.md) | 문서 허브 | 현재 문서 |
 | [PHONE_SHOP_REQUIREMENTS_TEMPLATE.md](./PHONE_SHOP_REQUIREMENTS_TEMPLATE.md) | 요구사항 정리 템플릿 | 제품 범위 논의 시 사용 |
+| [SCHEDULE_MANAGEMENT_PLAN.md](./SCHEDULE_MANAGEMENT_PLAN.md) | 일정 관리 메뉴 신규 도입 계획 | 일정 관리 기준 문서 |
 | [PHONE_SHOP_WORK_PLAN.md](./PHONE_SHOP_WORK_PLAN.md) | 단계별 실행 계획과 진행 메모 | 현재 진행 기준 문서 |
 | [PROJECT_SETUP_REPORT.md](./PROJECT_SETUP_REPORT.md) | 현재 환경 상태와 최근 개발 기록 | 현재 상태 기준 문서 |
 | [DEPLOYMENT_READINESS.md](./DEPLOYMENT_READINESS.md) | 배포 준비 기준과 점검 절차 | 배포 전 기준 문서 |
@@ -39,6 +40,10 @@
 요구사항을 다시 정리할 때:
 - [PHONE_SHOP_REQUIREMENTS_TEMPLATE.md](./PHONE_SHOP_REQUIREMENTS_TEMPLATE.md)
 
+일정 관리 메뉴 도입 계획을 확인할 때:
+- [SCHEDULE_MANAGEMENT_PLAN.md](./SCHEDULE_MANAGEMENT_PLAN.md)
+- `자동 일정`, `수동 일정`, `공휴일 공개 API 연동 방침`, `구현 순서`를 먼저 본다.
+
 초기 계획의 배경을 확인할 때:
 - [PROJECT_SETUP_PLAN.md](./PROJECT_SETUP_PLAN.md)
 
@@ -47,8 +52,10 @@
 - 2026-04-12 기준 8단계 `대시보드와 기본 보고`까지 완료됐다.
 - 2026-04-14 기준 판매 관리 개선, 공통 목록 페이지네이션, 미수금 감사 추적 보강까지 반영됐다.
 - 2026-04-15 기준 11단계 후속 패치에서 대시보드 차트형 개편, 개통 가능 규칙, 매장 축 도입, 판매 관리 UI 리뉴얼까지 반영됐다.
-- 현재 다음 실행 대상은 판매 등록 런처의 `신규 고객` 후속 연계 흐름과 잔여 메뉴 QA다.
-- 최신 검증 통과 상태는 `pnpm prisma generate`, `pnpm prisma db seed`, `pnpm typecheck`, `pnpm build`, `pnpm playwright test tests/e2e/home.spec.ts`다.
+- 2026-04-20 기준 일정 관리 메뉴는 `ManualSchedule` 모델, no-key 공휴일 공개 API fallback, 월간 캘린더, 우측 요약 패널, 날짜 클릭 기반 수동 일정 CRUD까지 반영됐다.
+- 2026-04-20 기준 공통 / 대시보드 / 판매 / 미수금 모달 접근성 보강과 홈 / 모달 / 일정 관리 E2E 회귀가 외부 webpack dev server 재사용 모드와 `pnpm dev` self-start 경로 모두에서 다시 확인됐다.
+- 현재 다음 실행 대상은 배포 준비 문서 보강과 외부 환경 연결 정리다.
+- 최신 검증 통과 상태는 `pnpm lint`, `pnpm typecheck`, `pnpm vitest run src/lib/holidays.test.ts src/lib/schedule.test.ts src/app/actions/schedules.test.ts src/components/workspace/workspace-nav.test.tsx`, `pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts`다.
 
 ## 운영 원칙
 

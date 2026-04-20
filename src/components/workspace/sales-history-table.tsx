@@ -8,16 +8,21 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { cancelSaleAction } from "@/app/actions/sales";
 import { ConfirmSubmitButton } from "@/components/workspace/confirm-submit-button";
 import type { SalesRecord } from "@/components/workspace/sales-types";
-import { TonePill } from "@/components/workspace/workspace-primitives";
+import {
+  CarrierInlineLabel,
+  TonePill,
+} from "@/components/workspace/workspace-primitives";
 import {
   dangerButtonClassName,
   joinClassNames,
   secondaryButtonClassName,
 } from "@/components/workspace/ui-classnames";
+import { useModalAccessibility } from "@/components/workspace/use-modal-accessibility";
 import { formatKstDate } from "@/lib/date-utils";
 import { formatWon } from "@/lib/formatters";
 import type { SalesUrlFilters } from "@/lib/sales-url-state";
@@ -260,29 +265,18 @@ export function SalesHistoryTable({
   const [activeSaleId, setActiveSaleId] = useState<string | null>(null);
   const [detailMode, setDetailMode] = useState<DetailMode>("overview");
   const cancelInputRef = useRef<HTMLInputElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const activeSale = useMemo(
     () => sales.find((sale) => sale.id === activeSaleId) ?? null,
     [activeSaleId, sales],
   );
 
-  useEffect(() => {
-    if (!activeSale) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setActiveSaleId(null);
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeSale]);
+  useModalAccessibility({
+    containerRef: panelRef,
+    isOpen: Boolean(activeSale),
+    onClose: () => setActiveSaleId(null),
+  });
 
   useEffect(() => {
     if (activeSale && detailMode === "cancel") {
@@ -354,12 +348,20 @@ export function SalesHistoryTable({
                     </span>
                   </td>
                   <td className="border-y border-stone-200 px-3 py-2.5 align-middle">
-                    <span
-                      className="block max-w-[21rem] truncate font-medium text-slate-700"
-                      title={saleSummary}
-                    >
-                      {saleSummary}
-                    </span>
+                    <div className="space-y-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <CarrierInlineLabel className="shrink-0" label={sale.carrierName} />
+                        <span
+                          className="block min-w-0 max-w-[14rem] truncate font-medium text-slate-700"
+                          title={saleSummary}
+                        >
+                          {sale.deviceModelName}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {sale.ratePlanName ? `요금제 ${sale.ratePlanName}` : "요금제 미선택"}
+                      </p>
+                    </div>
                   </td>
                   <td className="border-y border-stone-200 px-3 py-2.5 align-middle">
                     <div className="flex flex-wrap items-center gap-2">
@@ -414,7 +416,8 @@ export function SalesHistoryTable({
         </table>
       </div>
 
-      {activeSale ? (
+      {activeSale && typeof document !== "undefined"
+        ? createPortal(
         <div
           className="dashboard-dialog-backdrop fixed inset-0 z-[70] flex items-end justify-center bg-[rgba(15,23,42,0.42)] px-4 py-6 sm:items-center"
           onClick={() => setActiveSaleId(null)}
@@ -424,7 +427,9 @@ export function SalesHistoryTable({
             aria-modal="true"
             className="dashboard-dialog-panel flex max-h-[min(84vh,52rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[1.6rem] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.98)_100%)] shadow-[0_42px_90px_-34px_rgba(15,23,42,0.5)] backdrop-blur"
             onClick={(event) => event.stopPropagation()}
+            ref={panelRef}
             role="dialog"
+            tabIndex={-1}
           >
             <div className="flex items-start justify-between gap-4 border-b border-stone-200/90 px-5 py-4 sm:px-6">
               <div className="space-y-1.5">
@@ -522,10 +527,17 @@ export function SalesHistoryTable({
 
                   <section className="rounded-[1rem] border border-stone-200 bg-white/90 p-4">
                     <h4 className="text-sm font-semibold text-slate-950">판매 상품</h4>
-                    <div className="mt-3">
+                    <div className="mt-3 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CarrierInlineLabel label={activeSale.carrierName} />
+                        <span className="text-sm font-semibold text-slate-950">
+                          {activeSale.deviceModelName}
+                        </span>
+                      </div>
+                      <div>
                       <InfoRow
-                        label="기기"
-                        value={`${activeSale.carrierName} ${activeSale.deviceModelName}`}
+                        label="기종"
+                        value={activeSale.deviceModelName}
                       />
                       <InfoRow
                         label="요금제"
@@ -540,6 +552,7 @@ export function SalesHistoryTable({
                             : "없음"
                         }
                       />
+                      </div>
                     </div>
                   </section>
 
@@ -652,8 +665,10 @@ export function SalesHistoryTable({
               )}
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </>
   );
 }

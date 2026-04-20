@@ -1,12 +1,12 @@
 # PhoneShop Work Plan
 
-최종 갱신: 2026-04-18
+최종 갱신: 2026-04-20
 
 ## 현재 상태
 
 - 현재 작업 기준: `11단계. 운영 중 추가 요구사항 후속 패치`
-- 현재 활성 단계: `대시보드 / 판매관리 후속 패치 QA 마감 직전`
-- 현재 상태 요약: `신규 고객 -> 고객 등록 -> 판매 등록` handoff와 매장/기간 drill-down 정리를 마쳤고, 커스텀 날짜/선택 컨트롤 lint 정리까지 끝냈다. 다음 세션은 Playwright를 다시 돌릴 수 있도록 Turbopack dev-server 문제를 정리하고 최종 QA를 닫는 순서로 이어간다.
+- 현재 활성 단계: `일정 관리 CRUD / 검증 안정화 마감`
+- 현재 상태 요약: `ManualSchedule` 모델 / migration / seed, no-key 공휴일 공개 API 클라이언트 + 연도 캐시 fallback, 일정 관리 page-data와 월간 캘린더 / 우측 요약 패널, 날짜 클릭 기반 수동 일정 CRUD, 일정 관리 unit/E2E 검증까지 반영했다. 공개 API 실데이터와 `pnpm dev` self-start E2E도 현재 상태에서 재확인됐고, 다음 구현은 배포 준비 정리다.
 
 | Workstream | 상태 | 메모 |
 | --- | --- | --- |
@@ -15,7 +15,8 @@
 | C | 완료 | 대시보드 차트형 개편, 상세 모달, 매장 필터 도입 |
 | D | 완료 | 매장 축 / 개통 가능 규칙 / 기초정보·정책 연동 |
 | E | 대부분 완료 | 판매 관리 compact UI, 런처 모달, 자동 필터, 상세 모달, 페이지네이션 |
-| F | 마감 직전 | 신규 고객 -> 판매 등록 후속 흐름 완료, 남은 것은 Playwright 재검증 |
+| F | 완료 | 신규 고객 -> 판매 등록 후속 흐름 및 홈 시나리오 재검증 완료 |
+| G | 기초 계층 완료 | 일정 관리 모델 / 집계 / 캘린더 / 요약 패널 / 회귀 검증 완료 |
 
 ## 기준 문서
 
@@ -194,16 +195,53 @@
 - [x] 판매 관리 compact 필터/테이블/상세 모달/아이콘 액션/페이지네이션 적용
 - [x] 판매 등록 런처 모달 도입 (`기존 고객` / `신규 고객`)
 - [x] 날짜 선택기 의존성 루프와 판매 관리 뒤로가기/필터 상호작용 문제 수정
+- [x] 일정 관리 메뉴 라우트 / 스캐폴드 화면 추가
+- [x] `ManualSchedule` 모델 / migration / seed 추가
+- [x] 공휴일 API 클라이언트와 cache fallback 추가
+- [x] 일정 관리 page-data / 월간 캘린더 / 우측 요약 패널 구현
+- [x] 날짜 클릭 기반 수동 일정 생성 / 수정 / 완료 / 삭제 server action 추가
+- [x] 일정 관리 CRUD 모달과 캘린더 상호작용 연결
+- [x] 일정 관리 action / E2E 검증 추가
+- [x] 외부 dev server 재사용 시 Playwright serial verification 안정화
+- [x] 공통 / 대시보드 / 판매 / 미수금 모달 portal + focus trap + body scroll lock 정리
+- [x] 홈 / 모달 접근성 Playwright 시나리오를 최신 UI 기준으로 갱신
+- [x] stale Prisma client를 해소하도록 webpack dev server 재기동 후 `/schedule` 회귀 확인
+- [x] `pnpm prisma migrate dev --name add_manual_schedule`
 - [x] `pnpm prisma generate`
 - [x] `pnpm prisma db seed`
+- [x] `pnpm lint`
 - [x] `pnpm typecheck`
 - [x] `pnpm build`
+- [x] `pnpm vitest run src/lib/schedule.test.ts`
+- [x] `pnpm vitest run src/app/actions/schedules.test.ts`
 - [x] `pnpm vitest run src/lib/activation-rules.test.ts src/lib/dashboard-reporting.test.ts src/components/dashboard/dashboard-overview.test.tsx src/components/workspace/workspace-nav.test.tsx src/app/api/reports/summary/route.test.ts src/app/actions/receivables.test.ts`
 - [x] `pnpm playwright test tests/e2e/home.spec.ts`
+- [x] `PLAYWRIGHT_BASE_URL=http://localhost:3000 pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts`
+- [x] `PLAYWRIGHT_BASE_URL=http://localhost:3101 pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts`
 
 다음 세션 이어갈 항목:
-- [ ] Next 16 Turbopack Windows junction 오류를 정리하고 `pnpm playwright test tests/e2e/home.spec.ts` 재실행
-- [ ] 필요 시 배포 준비 문서와 외부 환경 연결 정리 재개
+- [ ] 배포 준비 문서와 외부 환경 연결 정리 재개
+
+### 11-A. 일정 관리 메뉴 신규 도입 준비
+
+목표:
+- 유지기간 만료 고객을 월간 캘린더 기준으로 관리할 수 있게 한다.
+- 판매, 수납 완료, 유지기간 만료, 공휴일, 수동 일정을 한 화면에서 합쳐 본다.
+
+기준 문서:
+- [SCHEDULE_MANAGEMENT_PLAN.md](./SCHEDULE_MANAGEMENT_PLAN.md)
+
+확정 범위:
+- 최상위 운영 메뉴 `/schedule`
+- `ADMIN`, `STAFF` 공용 접근
+- 상단 `3일`, `7일` 유지만료 요약 카드
+- 월간 캘린더 + 우측 요약 패널
+- 날짜 클릭 신규 일정 모달
+- no-key 공휴일 공개 API 연동
+
+비고:
+- 자동 일정은 저장하지 않고 계산형으로 유지
+- 수동 일정만 별도 모델로 저장
 
 ## 리뉴얼 구현 요약
 
@@ -265,9 +303,13 @@
 최근 확인 결과:
 - `pnpm prisma generate` 통과
 - `pnpm prisma db seed` 통과
+- `pnpm lint` 통과
 - `pnpm typecheck` 통과
 - `pnpm build` 통과
-- `pnpm playwright test tests/e2e/home.spec.ts` 통과
+- `pnpm vitest run src/lib/holidays.test.ts src/lib/schedule.test.ts src/app/actions/schedules.test.ts src/components/workspace/workspace-nav.test.tsx` 통과
+- `pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts` 통과
+- `PLAYWRIGHT_BASE_URL=http://localhost:3000 pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts` 통과
+- `PLAYWRIGHT_BASE_URL=http://localhost:3101 pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts` 통과
 
 ## 진행 메모
 
@@ -278,15 +320,30 @@
 - 2026-04-15 Workstream C: `CarrierActivationRule` / `Store` 축 도입과 기초정보·정책·대시보드·보고서 연동
 - 2026-04-15 Workstream D: 판매 관리 compact UI, 런처 모달, 자동 필터, 페이지네이션 정리
 - 2026-04-15 Workstream E: 날짜 선택기 의존성 루프와 판매 관리 상호작용 회귀 수정
+- 2026-04-20 Workstream F: 일정 관리 메뉴 스캐폴드 추가와 일정 도메인 착수
+- 2026-04-20 Workstream G: 모달 접근성 보강, 홈 / 모달 E2E 최신화 및 회귀 통과
 
 ## 다음 작업 기준
 
-- 현재 문서는 2026-04-15 기준 대시보드 / 매장 축 / 판매 관리 후속 패치까지 반영한다.
-- 다음 작업은 `신규 고객` 선택 이후 판매 등록으로 이어지는 후속 흐름부터 시작한다.
+- 현재 문서는 2026-04-20 기준 일정 관리 CRUD, no-key 공휴일 검증, direct self-start E2E 재확인까지 반영한다.
+- 다음 작업은 배포 준비 문서 정리와 외부 환경 연결부터 시작한다.
 - 중복 계획 문서를 늘리기보다 이 문서와 [PROJECT_SETUP_REPORT.md](./PROJECT_SETUP_REPORT.md), [.planning/.continue-here.md](./.planning/.continue-here.md)를 우선 갱신한다.
 ## 2026-04-18 Current Follow-up Snapshot
 
 - Workspace screens were pushed further toward a console-style layout with wider data surfaces and less explanatory copy.
 - Shared select/date popovers were moved onto independent layers and control heights were normalized.
 - Dashboard filters were expanded and customer management was rebuilt around auto-apply filters plus modal-driven detail flows.
-- The next recommended step is a broader cross-menu QA pass on the webpack dev server, then either final polish or Turbopack environment cleanup.
+- The next recommended step is deployment-readiness cleanup and external environment setup.
+
+## 2026-04-20 Follow-up Verification
+
+- Confirmed `/schedule?month=2026-05` renders live holidays from the no-key public source, including 노동절, 어린이날, 부처님 오신 날, and the substitute holiday.
+- Added focused holiday source tests and re-ran the key unit suite with `src/lib/holidays.test.ts`.
+- Re-ran `pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts` without `PLAYWRIGHT_BASE_URL`; the direct `pnpm dev` self-start path passed on the current machine state.
+
+## 2026-04-20 Current Follow-up Snapshot
+
+- Added `ManualSchedule` schema/migration/seed data plus the holiday API client and monthly cache fallback.
+- Implemented schedule month aggregation, the calendar board, and the right-side summary panel for `/schedule`.
+- Regenerated Prisma client, restarted the webpack dev server, and refreshed `tests/e2e/home.spec.ts` expectations for the current report and schedule UI.
+- Verified `home` and `modal-a11y` Playwright scenarios again against the refreshed webpack dev server at `http://localhost:3000`.

@@ -33,6 +33,7 @@ import {
 import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 import {
   ActionChip,
+  CarrierInlineLabel,
   CarrierTonePill,
   MetricCard,
   PageIntro,
@@ -271,7 +272,7 @@ function ActionIconButton({
   return (
     <button
       aria-label={label}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700 transition duration-150 hover:-translate-y-px hover:border-teal-300 hover:bg-teal-100"
+      className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700 transition duration-150 hover:-translate-y-px hover:border-teal-300 hover:bg-teal-100"
       onClick={onClick}
       title={label}
       type="button"
@@ -1026,7 +1027,7 @@ export function BaseInfoOverview({
                   {carriers.map((carrier) => (
                     <tr key={carrier.id} className="hover:bg-stone-50/70">
                       <TableCell>
-                        <p className="font-semibold text-slate-950">{carrier.name}</p>
+                        <CarrierInlineLabel label={carrier.name} />
                       </TableCell>
                       <TableCell>
                         <TonePill label={carrier.code} tone="slate" />

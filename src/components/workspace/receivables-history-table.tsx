@@ -24,7 +24,10 @@ import type {
   ReceivablesFilters,
 } from "@/components/workspace/receivables-types";
 import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
-import { TonePill } from "@/components/workspace/workspace-primitives";
+import {
+  CarrierInlineLabel,
+  TonePill,
+} from "@/components/workspace/workspace-primitives";
 import {
   dangerButtonClassName,
   joinClassNames,
@@ -349,7 +352,12 @@ export function ReceivablesHistoryTable({
                     </td>
                     <td className="border-y border-stone-200 px-3 py-2.5 align-middle text-slate-700">
                       <div className="space-y-1">
-                        <p className="font-medium">{record.saleSummary}</p>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <CarrierInlineLabel className="shrink-0" label={record.carrierName} />
+                          <p className="min-w-0 truncate font-medium text-slate-700">
+                            {record.deviceModelName}
+                          </p>
+                        </div>
                         <p className="text-xs text-slate-500">
                           {formatKstDate(record.saleDate)}
                           {record.storeName ? ` / ${record.storeName}` : ""}
@@ -443,7 +451,14 @@ export function ReceivablesHistoryTable({
             <div className="grid gap-4 lg:grid-cols-2">
               <section className="rounded-[1rem] border border-stone-200 bg-white/90 p-4">
                 <h4 className="text-sm font-semibold text-slate-950">고객 / 판매 정보</h4>
-                <div className="mt-3">
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CarrierInlineLabel label={activeRecord.carrierName} />
+                    <span className="text-sm font-semibold text-slate-950">
+                      {activeRecord.deviceModelName}
+                    </span>
+                  </div>
+                  <div>
                   <InfoRow label="고객명" value={activeRecord.customerName} />
                   <InfoRow label="연락처" value={activeRecord.customerPhone} />
                   <InfoRow label="통신사" value={activeRecord.carrierName} />
@@ -457,6 +472,7 @@ export function ReceivablesHistoryTable({
                     value={activeRecord.storeName ?? "미지정"}
                   />
                   <InfoRow label="담당자" value={activeRecord.staffName} />
+                  </div>
                 </div>
               </section>
 

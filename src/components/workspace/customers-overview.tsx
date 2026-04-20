@@ -12,6 +12,7 @@ import { QueryModalShell } from "@/components/workspace/query-modal-shell";
 import { secondaryButtonClassName } from "@/components/workspace/ui-classnames";
 import {
   ActionChip,
+  CarrierInlineLabel,
   CarrierTonePill,
   MetricCard,
   PageIntro,
@@ -377,9 +378,12 @@ function CustomerSalesModal({
             {customer.sales.map((sale) => (
               <article key={sale.id} className={surfaceClassName}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-semibold text-slate-950">
-                    {sale.carrierName} {sale.deviceModelName}
-                  </p>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <CarrierInlineLabel className="shrink-0" label={sale.carrierName} />
+                    <p className="min-w-0 truncate font-semibold text-slate-950">
+                      {sale.deviceModelName}
+                    </p>
+                  </div>
                   <span className="text-sm text-slate-500">
                     {formatKstDate(sale.saleDate)}
                   </span>

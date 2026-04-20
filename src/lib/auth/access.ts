@@ -38,6 +38,11 @@ export const workspaceNavigation: WorkspaceNavigationItem[] = [
     roles: ["ADMIN", "STAFF"],
   },
   {
+    href: "/schedule",
+    label: "일정 관리",
+    roles: ["ADMIN", "STAFF"],
+  },
+  {
     href: "/inventory",
     label: "재고 관리",
     roles: ["ADMIN", "STAFF"],

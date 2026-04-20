@@ -66,6 +66,7 @@ describe("WorkspaceNav", () => {
       "/sales",
       "/receivables",
       "/customers",
+      "/schedule",
       "/inventory",
       "/settings/base",
       "/settings/policies",
