@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import {
+  buildScheduleInitialDialogState,
   getScheduleOverviewPageData,
   type ScheduleSearchParams,
 } from "@/app/(workspace)/schedule/schedule-page-data";
@@ -15,7 +16,17 @@ export default async function SchedulePage({
 }: {
   searchParams: Promise<ScheduleSearchParams>;
 }) {
-  const pageData = await getScheduleOverviewPageData(await searchParams);
+  const resolvedSearchParams = await searchParams;
+  const pageData = await getScheduleOverviewPageData(resolvedSearchParams);
+  const initialDialogState = buildScheduleInitialDialogState(
+    resolvedSearchParams,
+    pageData.todayInput,
+  );
 
-  return <ScheduleOverview pageData={pageData} />;
+  return (
+    <ScheduleOverview
+      initialDialogState={initialDialogState}
+      pageData={pageData}
+    />
+  );
 }

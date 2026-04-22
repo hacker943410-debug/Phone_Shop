@@ -25,6 +25,17 @@ enum SaleStatus {
   CANCELED
 }
 
+enum SaleCustomerEntryType {
+  EXISTING
+  NEW
+}
+
+enum SaleActivationType {
+  DEVICE_CHANGE
+  NEW_SUBSCRIPTION
+  NUMBER_PORT
+}
+
 enum DiscountMethod {
   PERCENTAGE
   FIXED_AMOUNT
@@ -107,6 +118,17 @@ model Store {
   sales          Sale[]
 
   @@index([isActive, isDefault])
+}
+
+model SalesAgency {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sales     Sale[]
+
+  @@index([isActive])
 }
 
 model Carrier {
@@ -195,6 +217,16 @@ model AddOnService {
   @@index([isActive])
 }
 
+model InventoryColorOption {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
 model InventoryItem {
   id            String          @id @default(cuid())
   storeId       String?
@@ -202,7 +234,8 @@ model InventoryItem {
   deviceModelId String
   color         String
   capacity      String
-  imei          String          @unique
+  serialNumber  String          @unique
+  modelNumber   String
   costAmount    Int
   status        InventoryStatus
   receivedAt    DateTime
@@ -331,13 +364,28 @@ model Sale {
   id                          String            @id @default(cuid())
   saleDate                    DateTime
   status                      SaleStatus        @default(COMPLETED)
+  customerEntryType           SaleCustomerEntryType @default(EXISTING)
+  activationType              SaleActivationType @default(DEVICE_CHANGE)
   storeId                     String?
+  salesAgencyId               String?
   customerId                  String
   staffId                     String
   carrierId                   String
   ratePlanId                  String?
   inventoryItemId             String
   deviceModelId               String
+  wirelessPostpaidSelected    Boolean           @default(false)
+  wirelessPrepaidSelected     Boolean           @default(false)
+  wirelessGeneralSelected     Boolean           @default(false)
+  wirelessUsimOnlySelected    Boolean           @default(false)
+  wirelessUsedPhoneSelected   Boolean           @default(false)
+  wirelessEggSelected         Boolean           @default(false)
+  wiredInternetSelected       Boolean           @default(false)
+  wiredTvSelected             Boolean           @default(false)
+  wiredLandlineSelected       Boolean           @default(false)
+  wiredInternetPhoneSelected  Boolean           @default(false)
+  wiredBundleSelected         Boolean           @default(false)
+  additionalDeviceOnlySelected Boolean          @default(false)
   listPrice                   Int
   discountApplied             Boolean           @default(false)
   discountMethod              DiscountMethod?
@@ -385,10 +433,12 @@ model Sale {
   payments                    Payment[]
   ratePlan                    RatePlan?         @relation(fields: [ratePlanId], references: [id], onDelete: SetNull)
   receivable                  Receivable?
+  salesAgency                 SalesAgency?      @relation(fields: [salesAgencyId], references: [id], onDelete: SetNull)
   selectedServices            SaleAddOnService[]
   staff                       User              @relation("SalesStaff", fields: [staffId], references: [id], onDelete: Restrict)
   store                       Store?            @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
+  @@index([salesAgencyId, saleDate])
   @@index([storeId, saleDate])
   @@index([saleDate, status])
   @@index([customerId, saleDate])
@@ -408,7 +458,7 @@ model SaleAddOnService {
 
 model Receivable {
   id             String           @id @default(cuid())
-  saleId         String           @unique
+  saleId         String?          @unique
   customerId     String
   status         ReceivableStatus @default(UNPAID)
   originalAmount Int
@@ -419,7 +469,7 @@ model Receivable {
   updatedAt      DateTime         @updatedAt
   customer       Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   payments       Payment[]
-  sale           Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  sale           Sale?            @relation(fields: [saleId], references: [id], onDelete: SetNull)
 
   @@index([customerId, status])
   @@index([balanceAmount])
@@ -428,7 +478,7 @@ model Receivable {
 model Payment {
   id                 String        @id @default(cuid())
   receivableId       String
-  saleId             String
+  saleId             String?
   storeId            String?
   staffId            String
   canceledById       String?
@@ -443,7 +493,7 @@ model Payment {
   updatedAt          DateTime      @updatedAt
   canceledBy         User?         @relation("PaymentCanceledBy", fields: [canceledById], references: [id], onDelete: SetNull)
   receivable         Receivable    @relation(fields: [receivableId], references: [id], onDelete: Restrict)
-  sale               Sale          @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  sale               Sale?         @relation(fields: [saleId], references: [id], onDelete: SetNull)
   staff              User          @relation("PaymentStaff", fields: [staffId], references: [id], onDelete: Restrict)
   store              Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
 

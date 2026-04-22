@@ -68,6 +68,7 @@ describe("WorkspaceNav", () => {
       "/customers",
       "/schedule",
       "/inventory",
+      "/staffs",
       "/settings/base",
       "/settings/policies",
     ]);
@@ -84,12 +85,13 @@ describe("WorkspaceNav", () => {
     );
 
     expect(screen.getByText("판매 관리")).toBeInTheDocument();
+    expect(screen.getByText("직원 관리")).toBeInTheDocument();
     expect(screen.queryByText("MVP")).not.toBeInTheDocument();
     expect(
       screen.queryByText("오늘 판매, 수납, 미수 흐름 요약"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("IMEI 기준 재고 상태 추적"),
+      screen.queryByText("재고 식별번호 기반 상태 추적"),
     ).not.toBeInTheDocument();
   });
 });

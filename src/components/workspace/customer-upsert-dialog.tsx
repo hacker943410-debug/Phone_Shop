@@ -2,9 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 
-import {
-  upsertCustomerDialogAction,
-} from "@/app/actions/customers";
+import { upsertCustomerDialogAction } from "@/app/actions/customers";
 import {
   FormField,
   FormSelect,
@@ -12,11 +10,12 @@ import {
   SubmitButton,
 } from "@/components/workspace/admin-form-controls";
 import { secondaryButtonClassName } from "@/components/workspace/ui-classnames";
+import { WorkspaceMessageModal } from "@/components/workspace/workspace-alert-dialog";
+import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 import {
   buildCustomerUpsertActionState,
   type CustomerUpsertActionCustomer,
 } from "@/lib/customer-upsert-action-state";
-import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 
 export interface CustomerUpsertDialogCarrier {
   id: string;
@@ -151,16 +150,10 @@ export function CustomerUpsertDialog({
             defaultValue={state.fields.memo}
             label="메모"
             name="memo"
-            placeholder="상담 메모, 선호 기종, 후속 요청"
+            placeholder="상담 메모, 선호 기종, 약속 요청"
             rows={4}
             wrapperClassName="md:col-span-2"
           />
-
-          {state.message ? (
-            <div className="md:col-span-2 rounded-[1rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-800">
-              {state.message}
-            </div>
-          ) : null}
 
           <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
             <button
@@ -170,13 +163,18 @@ export function CustomerUpsertDialog({
             >
               닫기
             </button>
-            <SubmitButton
-              disabled={isPending}
-              label={isPending ? "저장 중..." : submitLabel}
-            />
+            <SubmitButton disabled={isPending} label={isPending ? "저장 중.." : submitLabel} />
           </div>
         </form>
       </div>
+
+      <WorkspaceMessageModal
+        message={state.message}
+        signal={state}
+        subtitle="Customer Form"
+        title="고객 정보를 확인해 주세요"
+        tone="error"
+      />
     </WorkspaceModalShell>
   );
 }

@@ -7,11 +7,12 @@ import {
   upsertInventoryItemAction,
 } from "@/app/actions/inventory";
 import {
+  CurrencyField,
   EmptyState,
   FormField,
+  ModelNumberField,
   FormSelect,
   FormTextArea,
-  ImeiField,
   NoticeBanner,
   SubmitButton,
 } from "@/components/workspace/admin-form-controls";
@@ -71,8 +72,8 @@ const inventoryStatusLabelMap = {
 } as const;
 
 const noticeMessageMap = {
-  "duplicate-imei":
-    "같은 IMEI 재고가 이미 존재합니다. 번호를 다시 확인해 주세요.",
+  "duplicate-serial":
+    "같은 S/N 재고가 이미 존재합니다. 번호를 다시 확인해 주세요.",
   "invalid-inventory-form":
     "재고 등록 또는 수정에 필요한 값이 비어 있습니다.",
   "inventory-not-found":
@@ -83,6 +84,12 @@ export interface InventoryCarrierOption {
   id: string;
   name: string;
   code: string;
+  isActive: boolean;
+}
+
+export interface InventoryColorOption {
+  id: string;
+  name: string;
   isActive: boolean;
 }
 
@@ -117,7 +124,8 @@ export interface InventoryItemRecord {
   deviceManufacturer: string | null;
   color: string;
   capacity: string;
-  imei: string;
+  serialNumber: string;
+  modelNumber: string;
   costAmount: number;
   status: InventoryStatusValue;
   receivedAt: Date;
@@ -149,6 +157,7 @@ export interface InventoryOverviewProps {
   currentUserId: string;
   stores: InventoryStoreOption[];
   carriers: InventoryCarrierOption[];
+  colors: InventoryColorOption[];
   deviceModels: InventoryDeviceModelOption[];
   staffMembers: InventoryStaffOption[];
   items: InventoryItemRecord[];
@@ -157,6 +166,17 @@ export interface InventoryOverviewProps {
   metrics: InventoryMetrics;
   notice: keyof typeof noticeMessageMap | null;
 }
+
+const inventoryCapacityOptions = [
+  "8GB",
+  "16GB",
+  "32GB",
+  "64GB",
+  "128GB",
+  "256GB",
+  "512GB",
+  "1TB",
+] as const;
 
 function getStatusLabel(status: InventoryStatusValue) {
   return inventoryStatusLabelMap[status];
@@ -168,6 +188,14 @@ function getCarrierOptionLabel(carrier: InventoryCarrierOption) {
 
 function getStoreOptionLabel(store: InventoryStoreOption) {
   return store.isDefault ? `${store.name} (기본)` : store.name;
+}
+
+function getColorOptionLabel(color: InventoryColorOption & { isLegacy?: boolean }) {
+  if (color.isLegacy) {
+    return `${color.name} (현재 저장값)`;
+  }
+
+  return color.isActive ? color.name : `${color.name} (비활성)`;
 }
 
 function getDeviceModelOptionLabel(deviceModel: InventoryDeviceModelOption) {
@@ -208,6 +236,45 @@ function getManufacturerOptions(deviceModels: InventoryDeviceModelOption[]) {
         .filter((manufacturer) => manufacturer.length > 0),
     ),
   ).sort((left, right) => left.localeCompare(right, "ko"));
+}
+
+function buildColorOptions(
+  colors: InventoryColorOption[],
+  currentColor: string | null | undefined,
+) {
+  const optionMap = new Map(
+    colors.map((color) => [
+      color.name,
+      {
+        ...color,
+        isLegacy: false,
+      },
+    ]),
+  );
+
+  const normalizedCurrentColor = currentColor?.trim();
+
+  if (normalizedCurrentColor && !optionMap.has(normalizedCurrentColor)) {
+    optionMap.set(normalizedCurrentColor, {
+      id: `legacy:${normalizedCurrentColor}`,
+      name: normalizedCurrentColor,
+      isActive: true,
+      isLegacy: true,
+    });
+  }
+
+  return [...optionMap.values()];
+}
+
+function buildCapacityOptions(currentCapacity: string | null | undefined) {
+  const optionSet = new Set<string>(inventoryCapacityOptions);
+  const normalizedCurrentCapacity = currentCapacity?.trim();
+
+  if (normalizedCurrentCapacity) {
+    optionSet.add(normalizedCurrentCapacity);
+  }
+
+  return [...optionSet];
 }
 
 function appendInventoryFilterParams(
@@ -376,6 +443,7 @@ interface InventoryItemFormProps {
   currentUserId: string;
   stores: InventoryStoreOption[];
   carriers: InventoryCarrierOption[];
+  colors: InventoryColorOption[];
   deviceModels: InventoryDeviceModelOption[];
   staffMembers: InventoryStaffOption[];
   initialItem?: InventoryItemRecord | null;
@@ -386,6 +454,7 @@ function InventoryItemForm({
   currentUserId,
   stores,
   carriers,
+  colors,
   deviceModels,
   staffMembers,
   initialItem = null,
@@ -395,6 +464,8 @@ function InventoryItemForm({
   const defaultReceivedAt = initialItem
     ? formatKstDate(initialItem.receivedAt)
     : formatKstDate(new Date());
+  const colorOptions = buildColorOptions(colors, initialItem?.color);
+  const capacityOptions = buildCapacityOptions(initialItem?.capacity);
 
   return (
     <form action={upsertInventoryItemAction} className={`${surfaceClassName} ${formGridClassName}`}>
@@ -434,37 +505,57 @@ function InventoryItemForm({
           </option>
         ))}
       </FormSelect>
-      <FormField
-        autoComplete="off"
+      <FormSelect
         defaultValue={initialItem?.color ?? ""}
+        helper="색상은 기초정보 > 색상 관리에서 등록할 수 있습니다."
         label="색상"
         name="color"
-        placeholder="Titanium Gray"
         required
-      />
-      <FormField
-        autoComplete="off"
+      >
+        <option value="">
+          {colorOptions.length > 0 ? "색상을 선택해 주세요" : "먼저 색상을 등록해 주세요"}
+        </option>
+        {colorOptions.map((color) => (
+          <option key={color.id} value={color.name}>
+            {getColorOptionLabel(color)}
+          </option>
+        ))}
+      </FormSelect>
+      <FormSelect
         defaultValue={initialItem?.capacity ?? ""}
         label="용량"
         name="capacity"
-        placeholder="256GB"
         required
-      />
-      <ImeiField
-        autoComplete="off"
-        defaultValue={initialItem?.imei ?? ""}
-        label="IMEI"
-        name="imei"
-        required
-      />
+      >
+        <option value="">용량을 선택해 주세요</option>
+        {capacityOptions.map((capacity) => (
+          <option key={capacity} value={capacity}>
+            {capacity}
+          </option>
+        ))}
+      </FormSelect>
       <FormField
+        autoComplete="off"
+        defaultValue={initialItem?.serialNumber ?? ""}
+        label="S/N"
+        name="serialNumber"
+        placeholder="SN-S25-001"
+        required
+      />
+      <ModelNumberField
+        autoComplete="off"
+        defaultValue={initialItem?.modelNumber ?? ""}
+        label="Model No."
+        name="modelNumber"
+        placeholder="SM-3028RKSPEW"
+        required
+      />
+      <CurrencyField
         defaultValue={initialItem?.costAmount ?? ""}
         label="입고가"
-        min="0"
         name="costAmount"
         placeholder="912000"
         required
-        type="number"
       />
       <FormSelect
         label="상태"
@@ -550,6 +641,7 @@ export function InventoryOverview({
   currentUserId,
   stores,
   carriers,
+  colors,
   deviceModels,
   staffMembers,
   items,
@@ -748,7 +840,8 @@ export function InventoryOverview({
                 <tr>
                   <th className="px-4 py-3 font-semibold">재고</th>
                   <th className="px-4 py-3 font-semibold">상태</th>
-                  <th className="px-4 py-3 font-semibold">IMEI</th>
+                  <th className="px-4 py-3 font-semibold">S/N</th>
+                  <th className="px-4 py-3 font-semibold">Model No.</th>
                   <th className="px-4 py-3 font-semibold">담당자</th>
                   <th className="px-4 py-3 font-semibold">입고일</th>
                   <th className="px-4 py-3 text-right font-semibold">작업</th>
@@ -783,7 +876,10 @@ export function InventoryOverview({
                       </div>
                     </td>
                     <td className="px-4 py-3.5 align-top font-mono text-slate-700 [font-variant-numeric:tabular-nums]">
-                      {item.imei}
+                      {item.serialNumber}
+                    </td>
+                    <td className="px-4 py-3.5 align-top text-slate-600">
+                      {item.modelNumber}
                     </td>
                     <td className="px-4 py-3.5 align-top text-slate-600">
                       {item.assigneeName ?? "미배정"}
@@ -831,6 +927,7 @@ export function InventoryOverview({
         >
           <InventoryItemForm
             carriers={carriers}
+            colors={colors}
             currentUserId={currentUserId}
             deviceModels={deviceModels}
             staffMembers={staffMembers}
@@ -868,7 +965,8 @@ export function InventoryOverview({
 
               <div className="mt-4 rounded-[1rem] border border-stone-200 bg-white/90 px-4 py-3">
                 <InfoRow label="매장" value={activeItem.storeName} />
-                <InfoRow label="IMEI" value={activeItem.imei} />
+                <InfoRow label="S/N" value={activeItem.serialNumber} />
+                <InfoRow label="Model No." value={activeItem.modelNumber} />
                 <InfoRow label="입고일" value={formatKstDate(activeItem.receivedAt)} />
                 <InfoRow
                   label="출고 기록"
@@ -914,6 +1012,7 @@ export function InventoryOverview({
           <div className="space-y-4">
             <InventoryItemForm
               carriers={carriers}
+              colors={colors}
               currentUserId={currentUserId}
               deviceModels={deviceModels}
               initialItem={activeItem}

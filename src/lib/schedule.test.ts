@@ -1,6 +1,7 @@
 import {
   buildScheduleCalendarWeeks,
   getScheduleEventPriority,
+  listUpcomingBusinessScheduleEvents,
   listScheduleMonthsBetween,
   resolveScheduleMonthState,
 } from "@/lib/schedule";
@@ -77,6 +78,52 @@ describe("schedule helpers", () => {
       "2026-03",
       "2026-04",
       "2026-05",
+    ]);
+  });
+
+  it("excludes holidays from upcoming items while keeping manual and retention events", () => {
+    const upcoming = listUpcomingBusinessScheduleEvents({
+      dateFrom: "2026-04-20",
+      events: [
+        {
+          id: "holiday",
+          dateInput: "2026-04-20",
+          kind: "HOLIDAY",
+          title: "임시 공휴일",
+          subtitle: null,
+          customerName: null,
+          priority: getScheduleEventPriority("HOLIDAY"),
+          manualStatus: null,
+          manualScheduleId: null,
+        },
+        {
+          id: "manual",
+          dateInput: "2026-04-21",
+          kind: "MANUAL",
+          title: "고객 재연락",
+          subtitle: null,
+          customerName: "김수현",
+          priority: getScheduleEventPriority("MANUAL"),
+          manualStatus: "OPEN",
+          manualScheduleId: "manual",
+        },
+        {
+          id: "retention",
+          dateInput: "2026-04-20",
+          kind: "RETENTION_DUE",
+          title: "유지기간 만료",
+          subtitle: null,
+          customerName: "박민수",
+          priority: getScheduleEventPriority("RETENTION_DUE"),
+          manualStatus: null,
+          manualScheduleId: null,
+        },
+      ],
+    });
+
+    expect(upcoming.map((event) => event.kind)).toEqual([
+      "RETENTION_DUE",
+      "MANUAL",
     ]);
   });
 });

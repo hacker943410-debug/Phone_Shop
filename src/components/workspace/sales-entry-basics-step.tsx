@@ -32,6 +32,7 @@ import {
   formatRatePlanAllowanceSummary,
   formatWon,
 } from "@/lib/formatters";
+import type { SaleCustomerEntryType } from "@/lib/sale-registration";
 
 const surfaceClassName =
   "rounded-xl border border-stone-200 bg-stone-50 p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05),0_1px_2px_rgba(15,23,42,0.08)]";
@@ -68,9 +69,11 @@ interface SalesEntryBasicsStepProps {
   currentUserName: string;
   saleDate: string;
   setSaleDate: Dispatch<SetStateAction<string>>;
+  customerEntryType: SaleCustomerEntryType | null;
   customers: SalesCustomerRecord[];
   customerId: string;
   setCustomerId: (customerId: string) => void;
+  onOpenCustomerCreateDialog: () => void;
   selectedCustomer: SalesCustomerRecord | null;
   availableInventory: SalesAvailableInventoryRecord[];
   inventoryItemId: string;
@@ -304,8 +307,8 @@ function parseThresholdInput(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function getShortImei(imei: string) {
-  return `IMEI ${imei.slice(-6)}`;
+function getShortSerialNumber(serialNumber: string) {
+  return `S/N ${serialNumber.slice(-6)}`;
 }
 
 function summarizeSelectedServices(
@@ -548,7 +551,7 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
   const inventoryMeta = props.selectedInventory
     ? `${props.selectedInventory.color} · ${props.selectedInventory.capacity} · ${
         props.selectedInventory.storeName ?? "매장 미지정"
-      } · ${getShortImei(props.selectedInventory.imei)}`
+      } · ${getShortSerialNumber(props.selectedInventory.serialNumber)} · Model No. ${props.selectedInventory.modelNumber}`
     : "";
   const ratePlanSummary = selectedRatePlan?.name ?? "요금제를 선택해 주세요";
   const ratePlanMeta = selectedRatePlan
@@ -609,7 +612,7 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
 
           <button
             type="button"
-            onClick={() => props.moveToStep(1)}
+            onClick={() => props.moveToStep(4)}
             disabled={!props.basicsStepValid}
             className={`${primaryButtonClassName} h-11 px-5 disabled:cursor-not-allowed disabled:opacity-60`}
           >
@@ -666,6 +669,15 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
                 <h4 className="text-base font-semibold text-slate-950">고객 표준 선택</h4>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {props.customerEntryType === "NEW" ? (
+                  <button
+                    type="button"
+                    className={inlineButtonClassName}
+                    onClick={props.onOpenCustomerCreateDialog}
+                  >
+                    신규 고객 등록
+                  </button>
+                ) : null}
                 <span className="rounded-full bg-white px-3 py-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-slate-500">
                   {filteredCustomers.length}명
                 </span>
@@ -722,6 +734,28 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
                 />
               </label>
             </div>
+
+            {props.customerEntryType === "NEW" ? (
+              <div className="mt-4 rounded-[1rem] border border-emerald-200 bg-emerald-50/80 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-950">
+                      신규 고객 등록 후 판매를 이어서 진행합니다.
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-emerald-800">
+                      고객 등록 모달에서 새 고객을 저장하면 자동으로 선택되어 현재 판매 흐름에 연결됩니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={applyButtonClassName}
+                    onClick={props.onOpenCustomerCreateDialog}
+                  >
+                    고객 등록
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4">
               {filteredCustomers.length > 0 ? (
@@ -790,7 +824,26 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
                   </div>
                 </div>
               ) : (
-                <EmptyState message="조건에 맞는 고객이 없습니다. 검색 조건을 다시 확인해 주세요." />
+                <div className="space-y-3">
+                  <EmptyState
+                    message={
+                      props.customerEntryType === "NEW"
+                        ? "등록된 신규 고객이 없습니다. 고객 등록 후 다시 선택해 주세요."
+                        : "조건에 맞는 기존 고객이 없습니다. 검색 조건을 다시 확인해 주세요."
+                    }
+                  />
+                  {props.customerEntryType === "NEW" ? (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className={applyButtonClassName}
+                        onClick={props.onOpenCustomerCreateDialog}
+                      >
+                        신규 고객 등록
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               )}
             </div>
           </article>
@@ -935,7 +988,7 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
                           const primaryLine = `${inventoryItem.carrierName} ${inventoryItem.deviceModelName}`;
                           const secondaryLine = `${inventoryItem.color} · ${inventoryItem.capacity} · ${
                             inventoryItem.storeName ?? "매장 미지정"
-                          } · ${getShortImei(inventoryItem.imei)}`;
+                          } · ${getShortSerialNumber(inventoryItem.serialNumber)} · Model No. ${inventoryItem.modelNumber}`;
 
                           return (
                             <tr
@@ -997,7 +1050,8 @@ export function SalesEntryBasicsStep(props: SalesEntryBasicsStepProps) {
                         label="사양"
                         value={`${inventoryDetailItem.color} / ${inventoryDetailItem.capacity}`}
                       />
-                      <DetailLine label="IMEI" value={inventoryDetailItem.imei} />
+                      <DetailLine label="S/N" value={inventoryDetailItem.serialNumber} />
+                      <DetailLine label="Model No." value={inventoryDetailItem.modelNumber} />
                       <DetailLine
                         label="매장"
                         value={inventoryDetailItem.storeName ?? "매장 미지정"}

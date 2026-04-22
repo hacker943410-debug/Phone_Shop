@@ -1,6 +1,10 @@
-import { EmptyState, NoticeBanner } from "@/components/workspace/admin-form-controls";
+import {
+  EmptyState,
+  NoticeBanner,
+} from "@/components/workspace/admin-form-controls";
 import { ReceivablesFilterBar } from "@/components/workspace/receivables-filter-bar";
 import { ReceivablesHistoryTable } from "@/components/workspace/receivables-history-table";
+import { ReceivablesManualCreatePanel } from "@/components/workspace/receivables-manual-create-panel";
 import type {
   ReceivableCarrierOption,
   ReceivableCustomerOption,
@@ -22,6 +26,10 @@ import type { PaginationState } from "@/lib/pagination";
 const noticeMessageMap: Record<ReceivablesNotice, string> = {
   "invalid-payment-form":
     "수납 입력값이 비어 있거나 올바르지 않습니다. 수납일, 금액, 메모를 다시 확인해 주세요.",
+  "invalid-manual-receivable-form":
+    "기존 고객과 미수 금액을 확인해 주세요.",
+  "manual-receivable-customer-not-found":
+    "선택한 고객을 찾지 못했습니다. 고객 목록을 새로고침한 뒤 다시 시도해 주세요.",
   "receivable-not-found":
     "선택한 미수금 건을 찾지 못했습니다. 목록에서 다시 확인하거나 새로고침해 주세요.",
   "payment-not-found":
@@ -124,6 +132,12 @@ export function ReceivablesOverview({
 
       {notice ? <NoticeBanner message={noticeMessageMap[notice]} /> : null}
 
+      <ReceivablesManualCreatePanel
+        customers={customers}
+        filters={filters}
+        pagination={pagination}
+      />
+
       <Panel
         title="필터"
         className="relative z-20 shrink-0"
@@ -154,10 +168,7 @@ export function ReceivablesOverview({
         </div>
       </Panel>
 
-      <Panel
-        title="미수금 목록"
-        contentClassName="space-y-3"
-      >
+      <Panel title="미수금 목록" contentClassName="space-y-3">
         {records.length > 0 ? (
           <div>
             <ReceivablesHistoryTable

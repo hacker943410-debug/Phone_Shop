@@ -11,6 +11,7 @@ import {
   buildScheduleCalendarWeeks,
   countScheduleEventsInRange,
   getScheduleEventPriority,
+  listUpcomingBusinessScheduleEvents,
   listScheduleMonthsBetween,
   resolveScheduleMonthState,
   shiftScheduleMonth,
@@ -25,7 +26,31 @@ const dayMs = 86_400_000;
 
 export type ScheduleSearchParams = {
   month?: string | string[];
+  open?: string | string[];
+  scheduledDate?: string | string[];
+  title?: string | string[];
+  customerId?: string | string[];
+  memo?: string | string[];
+  saleId?: string | string[];
+  saleCustomerId?: string | string[];
+  saleLabel?: string | string[];
 };
+
+export interface ScheduleDialogDraft {
+  title: string;
+  scheduledDate: string;
+  status: ManualScheduleStatusValue;
+  customerId: string | null;
+  memo: string | null;
+  saleId: string | null;
+  saleCustomerId: string | null;
+  saleLabel: string | null;
+}
+
+export interface ScheduleInitialDialogState {
+  defaultDateInput: string;
+  initialSchedule: ScheduleDialogDraft;
+}
 
 export interface ScheduleManualScheduleItem {
   id: string;
@@ -47,6 +72,7 @@ export interface ScheduleDialogCustomerOption {
 }
 
 export interface ScheduleOverviewPageData {
+  todayInput: string;
   month: {
     currentMonthInput: string;
     monthInput: string;
@@ -84,6 +110,44 @@ export interface ScheduleOverviewPageData {
 
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+function isValidDateInput(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+export function buildScheduleInitialDialogState(
+  searchParams: ScheduleSearchParams,
+  fallbackDateInput: string,
+): ScheduleInitialDialogState | null {
+  if (readSearchParam(searchParams.open) !== "create") {
+    return null;
+  }
+
+  const requestedDateInput = readSearchParam(searchParams.scheduledDate);
+  const defaultDateInput = isValidDateInput(requestedDateInput)
+    ? requestedDateInput
+    : fallbackDateInput;
+  const title = readSearchParam(searchParams.title) || "미수금 후속 연락";
+  const customerId = readSearchParam(searchParams.customerId) || null;
+  const memo = readSearchParam(searchParams.memo) || null;
+  const saleId = readSearchParam(searchParams.saleId) || null;
+  const saleCustomerId = readSearchParam(searchParams.saleCustomerId) || null;
+  const saleLabel = readSearchParam(searchParams.saleLabel) || null;
+
+  return {
+    defaultDateInput,
+    initialSchedule: {
+      title,
+      scheduledDate: defaultDateInput,
+      status: "OPEN",
+      customerId,
+      memo,
+      saleId,
+      saleCustomerId,
+      saleLabel,
+    },
+  };
 }
 
 function resolveHolidayStatus(statuses: KoreanHolidayFetchStatus[]) {
@@ -220,6 +284,15 @@ export async function getScheduleOverviewPageData(
         id: true,
         paymentDate: true,
         amount: true,
+        receivable: {
+          select: {
+            customer: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
         sale: {
           select: {
             customer: {
@@ -420,9 +493,11 @@ export async function getScheduleOverviewPageData(
     id: `payment:${payment.id}`,
     dateInput: formatKstDate(payment.paymentDate),
     kind: "PAYMENT_COMPLETED",
-    title: `${payment.sale.customer.name} 수납 ${formatWon(payment.amount)}`,
-    subtitle: `${payment.sale.carrier.name} ${payment.sale.deviceModel.name}`,
-    customerName: payment.sale.customer.name,
+    title: `${payment.sale?.customer.name ?? payment.receivable.customer.name} 수납 ${formatWon(payment.amount)}`,
+    subtitle: payment.sale
+      ? `${payment.sale.carrier.name} ${payment.sale.deviceModel.name}`
+      : "수동 미수금 수납",
+    customerName: payment.sale?.customer.name ?? payment.receivable.customer.name,
     priority: getScheduleEventPriority("PAYMENT_COMPLETED"),
     manualStatus: null,
     manualScheduleId: null,
@@ -462,9 +537,11 @@ export async function getScheduleOverviewPageData(
   const manualSchedulesInMonth = allMonthEvents.filter(
     (event) => event.kind === "MANUAL",
   );
-  const highlightEvents =
-    allMonthEvents.filter((event) => event.dateInput >= todayInput).slice(0, 8) ||
-    [];
+  const highlightEvents = listUpcomingBusinessScheduleEvents({
+    events: allMonthEvents,
+    dateFrom: todayInput,
+    limit: 8,
+  });
   const calendarWeeks = buildScheduleCalendarWeeks({
     monthState,
     events: visibleEvents,
@@ -472,6 +549,7 @@ export async function getScheduleOverviewPageData(
   const holidayStatus = resolveHolidayStatus(holidayResults.map((result) => result.status));
 
   return {
+    todayInput,
     month: {
       currentMonthInput: todayInput.slice(0, 7),
       monthInput: monthState.monthInput,
@@ -501,7 +579,14 @@ export async function getScheduleOverviewPageData(
     },
     calendarWeeks,
     monthEventCounts: buildMonthCounts(allMonthEvents),
-    highlightEvents: highlightEvents.length > 0 ? highlightEvents : allMonthEvents.slice(0, 8),
+    highlightEvents:
+      highlightEvents.length > 0
+        ? highlightEvents
+        : listUpcomingBusinessScheduleEvents({
+            events: allMonthEvents,
+            dateFrom: monthState.monthStartInput,
+            limit: 8,
+          }),
     allMonthEvents,
     manualSchedules: manualSchedulesInMonth,
     manualScheduleItems,

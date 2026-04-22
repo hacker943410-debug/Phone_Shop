@@ -6,10 +6,6 @@ export function normalizePhoneNumber(value: string) {
   return normalizeDigits(value);
 }
 
-export function normalizeImei(value: string) {
-  return normalizeDigits(value).slice(0, 15);
-}
-
 export function normalizeMoneyInput(value: string) {
   return normalizeDigits(value);
 }

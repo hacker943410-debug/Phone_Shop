@@ -1,16 +1,8 @@
 import type { Metadata } from "next";
 
 import { BaseInfoOverview } from "@/components/workspace/base-info-overview";
-import {
-  defaultBackupDirectory,
-  formatBackupCreatedAt,
-  formatBackupSize,
-  listBackupFiles,
-  readBackupSettings,
-  resolveDatabaseFilePath,
-} from "@/lib/backup-storage";
 import { requireRole } from "@/lib/auth/dal";
-import { prisma } from "@/lib/prisma";
+import { getBaseInfoOverviewData } from "@/lib/base-info-page-data";
 
 export const metadata: Metadata = {
   title: "기초정보",
@@ -24,14 +16,22 @@ function isBaseInfoTabValue(
   value: string,
 ): value is
   | "stores"
+  | "staffs"
   | "carriers"
+  | "salesAgencies"
+  | "colors"
+  | "deviceModels"
   | "ratePlans"
   | "addOnServices"
   | "backup"
   | "restore" {
   return (
     value === "stores" ||
+    value === "staffs" ||
     value === "carriers" ||
+    value === "salesAgencies" ||
+    value === "colors" ||
+    value === "deviceModels" ||
     value === "ratePlans" ||
     value === "addOnServices" ||
     value === "backup" ||
@@ -78,103 +78,11 @@ export default async function BaseInfoPage({
 
   const initialTab = isBaseInfoTabValue(tabValue) ? tabValue : "stores";
   const notice = isBaseInfoNoticeValue(noticeValue) ? noticeValue : null;
-
-  const [storeRows, carrierRows, ratePlanRows, addOnServiceRows, backupSettings] =
-    await Promise.all([
-      prisma.store.findMany({
-        orderBy: [{ isDefault: "desc" }, { isActive: "desc" }, { name: "asc" }],
-      }),
-      prisma.carrier.findMany({
-        orderBy: [{ isActive: "desc" }, { name: "asc" }],
-        include: {
-          _count: {
-            select: {
-              ratePlans: true,
-              services: true,
-            },
-          },
-        },
-      }),
-      prisma.ratePlan.findMany({
-        orderBy: [{ isActive: "desc" }, { name: "asc" }],
-        include: {
-          carrier: {
-            select: {
-              id: true,
-              name: true,
-              isActive: true,
-            },
-          },
-        },
-      }),
-      prisma.addOnService.findMany({
-        orderBy: [{ isActive: "desc" }, { name: "asc" }],
-        include: {
-          carrier: {
-            select: {
-              id: true,
-              name: true,
-              isActive: true,
-            },
-          },
-        },
-      }),
-      readBackupSettings(),
-    ]);
-
-  const backupFiles = await listBackupFiles(backupSettings.backupDirectory);
+  const overviewData = await getBaseInfoOverviewData();
 
   return (
     <BaseInfoOverview
-      stores={storeRows.map((store) => ({
-        id: store.id,
-        code: store.code,
-        name: store.name,
-        region: store.region,
-        isActive: store.isActive,
-        isDefault: store.isDefault,
-      }))}
-      carriers={carrierRows.map((carrier) => ({
-        id: carrier.id,
-        code: carrier.code,
-        name: carrier.name,
-        isActive: carrier.isActive,
-        ratePlanCount: carrier._count.ratePlans,
-        addOnServiceCount: carrier._count.services,
-      }))}
-      ratePlans={ratePlanRows.map((ratePlan) => ({
-        id: ratePlan.id,
-        carrierId: ratePlan.carrierId,
-        carrierName: ratePlan.carrier.name,
-        carrierActive: ratePlan.carrier.isActive,
-        name: ratePlan.name,
-        monthlyFee: ratePlan.monthlyFee,
-        voiceCallMinutes: ratePlan.voiceCallMinutes,
-        videoCallMinutes: ratePlan.videoCallMinutes,
-        dataAllowanceGb: ratePlan.dataAllowanceGb,
-        description: ratePlan.description,
-        isActive: ratePlan.isActive,
-      }))}
-      addOnServices={addOnServiceRows.map((service) => ({
-        id: service.id,
-        carrierId: service.carrierId,
-        carrierName: service.carrier?.name ?? null,
-        carrierActive: service.carrier?.isActive ?? null,
-        name: service.name,
-        monthlyFee: service.monthlyFee,
-        description: service.description,
-        isActive: service.isActive,
-      }))}
-      backupState={{
-        currentDirectory: backupSettings.backupDirectory,
-        defaultDirectory: defaultBackupDirectory,
-        sourceDatabasePath: resolveDatabaseFilePath(),
-        backups: backupFiles.map((backup) => ({
-          fileName: backup.fileName,
-          createdAtLabel: formatBackupCreatedAt(backup.createdAt),
-          sizeLabel: formatBackupSize(backup.sizeBytes),
-        })),
-      }}
+      {...overviewData}
       initialTab={initialTab}
       notice={notice}
     />

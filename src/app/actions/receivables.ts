@@ -10,11 +10,32 @@ import { calculateReceivableState } from "@/lib/receivable-payments";
 import {
   PaymentMethod,
   PaymentStatus,
+  ReceivableStatus,
   type PaymentMethod as PaymentMethodValue,
 } from "../../../prisma/generated/client/enums";
 
-function redirectReceivableNotice(notice: string): never {
-  redirect(`/receivables?notice=${notice}`);
+function resolveReceivableReturnTo(returnTo: string | null) {
+  if (!returnTo || !returnTo.startsWith("/receivables")) {
+    return "/receivables";
+  }
+
+  return returnTo;
+}
+
+function buildReceivableNoticeHref(notice: string, returnTo: string | null) {
+  const target = new URL(
+    resolveReceivableReturnTo(returnTo),
+    "https://phoneshop.local",
+  );
+  target.searchParams.set("notice", notice);
+  return `${target.pathname}${target.search}`;
+}
+
+function redirectReceivableNotice(
+  notice: string,
+  returnTo: string | null = null,
+): never {
+  redirect(buildReceivableNoticeHref(notice, returnTo));
 }
 
 function readText(formData: FormData, key: string) {
@@ -27,7 +48,7 @@ function readOptionalText(formData: FormData, key: string) {
 }
 
 function readPositiveInt(formData: FormData, key: string) {
-  const value = readText(formData, key);
+  const value = readText(formData, key).replace(/\D/g, "");
 
   if (!value) {
     return null;
@@ -68,6 +89,46 @@ function revalidateReceivableViews() {
   revalidatePath("/customers");
   revalidatePath("/sales");
   revalidatePath("/");
+}
+
+export async function createManualReceivableAction(formData: FormData) {
+  await requireCurrentUser();
+
+  const customerId = readText(formData, "customerId");
+  const amount = readPositiveInt(formData, "amount");
+  const memo = readOptionalText(formData, "memo");
+  const returnTo = readOptionalText(formData, "returnTo");
+
+  if (!customerId || amount === null) {
+    redirectReceivableNotice("invalid-manual-receivable-form", returnTo);
+  }
+
+  const customer = await prisma.customer.findFirst({
+    where: {
+      id: customerId,
+      isHidden: false,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!customer) {
+    redirectReceivableNotice("manual-receivable-customer-not-found", returnTo);
+  }
+
+  await prisma.receivable.create({
+    data: {
+      saleId: null,
+      customerId: customer.id,
+      status: ReceivableStatus.UNPAID,
+      originalAmount: amount,
+      balanceAmount: amount,
+      memo,
+    },
+  });
+
+  revalidateReceivableViews();
 }
 
 async function resolveDefaultStoreId() {
@@ -142,7 +203,7 @@ export async function recordPaymentAction(formData: FormData) {
         data: {
           receivableId: receivable.id,
           saleId: receivable.saleId,
-          storeId: receivable.sale.storeId ?? defaultStoreId,
+          storeId: receivable.sale?.storeId ?? defaultStoreId,
           staffId: currentUser.id,
           paymentDate,
           amount,

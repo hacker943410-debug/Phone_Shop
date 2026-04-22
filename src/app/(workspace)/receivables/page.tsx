@@ -23,6 +23,8 @@ function readSearchParam(value: string | string[] | undefined) {
 function isReceivablesNotice(value: string): value is ReceivablesNotice {
   return (
     value === "invalid-payment-form" ||
+    value === "invalid-manual-receivable-form" ||
+    value === "manual-receivable-customer-not-found" ||
     value === "receivable-not-found" ||
     value === "payment-not-found" ||
     value === "payment-cancel-reason-required" ||
@@ -103,18 +105,22 @@ export default async function ReceivablesPage({
               : []),
             {
               sale: {
-                carrier: {
-                  name: {
-                    contains: q,
+                is: {
+                  carrier: {
+                    name: {
+                      contains: q,
+                    },
                   },
                 },
               },
             },
             {
               sale: {
-                deviceModel: {
-                  name: {
-                    contains: q,
+                is: {
+                  deviceModel: {
+                    name: {
+                      contains: q,
+                    },
                   },
                 },
               },
@@ -135,7 +141,9 @@ export default async function ReceivablesPage({
     ...(carrierId
       ? {
           sale: {
-            carrierId,
+            is: {
+              carrierId,
+            },
           },
         }
       : {}),
@@ -305,15 +313,18 @@ export default async function ReceivablesPage({
           id: record.id,
           saleId: record.saleId,
           customerId: record.customerId,
-          carrierId: record.sale.carrierId,
+          carrierId: record.sale?.carrierId ?? null,
           customerName: record.customer.name,
           customerPhone: record.customer.phone,
-          saleDate: record.sale.saleDate,
-          carrierName: record.sale.carrier.name,
-          deviceModelName: record.sale.deviceModel.name,
-          saleSummary: `${record.sale.carrier.name} ${record.sale.deviceModel.name}`,
-          storeName: record.sale.store?.name ?? null,
-          staffName: record.sale.staff.displayName,
+          referenceDate: record.sale?.saleDate ?? record.createdAt,
+          carrierName: record.sale?.carrier.name ?? "수동 등록",
+          deviceModelName: record.sale?.deviceModel.name ?? "미수금",
+          saleSummary: record.sale
+            ? `${record.sale.carrier.name} ${record.sale.deviceModel.name}`
+            : "수동 등록 미수금",
+          storeName: record.sale?.store?.name ?? null,
+          staffName: record.sale?.staff.displayName ?? "수동 등록",
+          isManualEntry: record.sale === null,
           originalAmount: record.originalAmount,
           paidAmount,
           balanceAmount: record.balanceAmount,

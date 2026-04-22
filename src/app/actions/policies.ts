@@ -236,10 +236,11 @@ export async function upsertStaffCommissionPolicyAction(formData: FormData) {
       displayName: true,
       username: true,
       isActive: true,
+      role: true,
     },
   });
 
-  if (!staff) {
+  if (!staff || staff.role !== "STAFF") {
     return;
   }
 

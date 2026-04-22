@@ -226,3 +226,12 @@ MVP 핵심 흐름은 완료됐고, 현재는 `11단계. 운영 중 추가 요구
 - Replaced the keyed holiday dependency with no-key public sources and confirmed `/schedule?month=2026-05` renders live Korean holidays from the hosted public feed.
 - Added `src/lib/holidays.test.ts` for hosted source parsing, fallback parsing, year-cache reuse, and concurrent failure handling.
 - Re-ran `pnpm playwright test tests/e2e/home.spec.ts tests/e2e/modal-a11y.spec.ts tests/e2e/schedule.spec.ts` without `PLAYWRIGHT_BASE_URL`; the direct `pnpm dev` self-start path passed again on the current machine state.
+
+### 2026-04-22 Operations UX Consolidation, Inventory Mastering, And Customer Contract Visibility
+
+- Reworked the dashboard into an operations-first console with compact charts, filterable reporting, PDF export, and follow-up queues for maintenance expiration and scheduled work.
+- Split staff management into its own workspace route and expanded base-info management with sales agencies, inventory colors, and Samsung / Apple device-model masters.
+- Rebuilt sales registration into a staged flow with customer type, activation type, product preselection, and stronger inventory / agency validation, then linked receivables directly into follow-up schedule creation.
+- Migrated inventory handling from IMEI-centered records to `S/N + Model No.`, added structured model-number formatting, selectable capacity and color inputs, and the related Prisma migrations and tests.
+- Converted alert / confirm flows to modal-based UX, added manual receivable creation, and updated customer detail views to surface monthly plan fee plus remaining handset installment summary from completed sales.
+- Verified the recent batch with `pnpm prisma migrate deploy`, `pnpm prisma generate`, `pnpm typecheck`, focused `vitest` suites for sales / inventory / dashboard / base-info / schedule / customer-contract helpers, and route sanity checks on `http://localhost:3000`.

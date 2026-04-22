@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
@@ -76,6 +77,30 @@ function getPaymentAuditSummary(payment: ReceivablePaymentRecord) {
   return `수납 ${formatKstDate(payment.paymentDate)} / 등록 ${formatKstDate(
     payment.createdAt,
   )} / 담당 ${payment.staffName}`;
+}
+
+function getReceivableReferenceLabel(record: ReceivableRecord) {
+  return record.isManualEntry ? "등록일" : "판매일";
+}
+
+function getReceivableMetaLine(record: ReceivableRecord) {
+  const parts = [
+    `${getReceivableReferenceLabel(record)} ${formatKstDate(record.referenceDate)}`,
+  ];
+
+  if (record.storeName) {
+    parts.push(record.storeName);
+  }
+
+  return parts.join(" / ");
+}
+
+function getReceivableSummaryLabel(record: ReceivableRecord) {
+  return record.isManualEntry ? "등록 구분" : "판매 요약";
+}
+
+function getReceivableInfoSectionTitle(record: ReceivableRecord) {
+  return record.isManualEntry ? "고객 / 등록 정보" : "고객 / 판매 정보";
 }
 
 function LegendIcon({
@@ -217,6 +242,51 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function buildCustomerSearchHref(phone: string, returnTo: string) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("q", phone);
+  searchParams.set("returnTo", returnTo);
+  return `/customers?${searchParams.toString()}`;
+}
+
+function buildRelatedSalesHref(phone: string) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("q", phone);
+  return `/sales?${searchParams.toString()}`;
+}
+
+function buildFollowUpScheduleHref(record: ReceivableRecord) {
+  const todayInput = formatKstDate(new Date());
+  const searchParams = new URLSearchParams();
+  const memoParts = [
+    `잔액 ${formatWon(record.balanceAmount)}`,
+    `${getReceivableReferenceLabel(record)} ${formatKstDate(record.referenceDate)}`,
+    record.storeName,
+    !record.isManualEntry ? `${record.carrierName} ${record.deviceModelName}` : null,
+  ].filter(Boolean);
+
+  searchParams.set("month", todayInput.slice(0, 7));
+  searchParams.set("open", "create");
+  searchParams.set("scheduledDate", todayInput);
+  searchParams.set(
+    "title",
+    record.isManualEntry ? "수동 미수금 후속 연락" : "미수금 잔액 확인",
+  );
+  searchParams.set("customerId", record.customerId);
+
+  if (memoParts.length > 0) {
+    searchParams.set("memo", memoParts.join(" / "));
+  }
+
+  if (record.saleId) {
+    searchParams.set("saleId", record.saleId);
+    searchParams.set("saleCustomerId", record.customerId);
+    searchParams.set("saleLabel", `${record.carrierName} ${record.deviceModelName}`);
+  }
+
+  return `/schedule?${searchParams.toString()}`;
+}
+
 export interface ReceivablesHistoryTableProps {
   defaultPaymentDate: string;
   filters: ReceivablesFilters;
@@ -331,7 +401,7 @@ export function ReceivablesHistoryTable({
               <thead className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
                 <tr>
                   <th className="px-3 pb-1 font-semibold">고객</th>
-                  <th className="px-3 pb-1 font-semibold">판매건</th>
+                  <th className="px-3 pb-1 font-semibold">참조 정보</th>
                   <th className="px-3 pb-1 font-semibold">상태</th>
                   <th className="px-3 pb-1 font-semibold">잔액</th>
                   <th className="px-3 pb-1 font-semibold">수납</th>
@@ -353,14 +423,20 @@ export function ReceivablesHistoryTable({
                     <td className="border-y border-stone-200 px-3 py-2.5 align-middle text-slate-700">
                       <div className="space-y-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <CarrierInlineLabel className="shrink-0" label={record.carrierName} />
+                          {record.isManualEntry ? (
+                            <TonePill label="수동 등록" tone="amber" />
+                          ) : (
+                            <CarrierInlineLabel
+                              className="shrink-0"
+                              label={record.carrierName}
+                            />
+                          )}
                           <p className="min-w-0 truncate font-medium text-slate-700">
                             {record.deviceModelName}
                           </p>
                         </div>
                         <p className="text-xs text-slate-500">
-                          {formatKstDate(record.saleDate)}
-                          {record.storeName ? ` / ${record.storeName}` : ""}
+                          {getReceivableMetaLine(record)}
                           {` / 담당 ${record.staffName}`}
                         </p>
                       </div>
@@ -431,8 +507,8 @@ export function ReceivablesHistoryTable({
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-4">
               <SummaryCard
-                label="판매일"
-                value={formatKstDate(activeRecord.saleDate)}
+                label={getReceivableReferenceLabel(activeRecord)}
+                value={formatKstDate(activeRecord.referenceDate)}
               />
               <SummaryCard
                 label="현재 상태"
@@ -448,30 +524,72 @@ export function ReceivablesHistoryTable({
               />
             </div>
 
+            <div className="flex flex-wrap gap-2">
+              {activeRecord.balanceAmount > 0 ? (
+                <Link
+                  className={`${secondaryButtonClassName} h-10 px-4`}
+                  href={buildFollowUpScheduleHref(activeRecord)}
+                  prefetch={false}
+                >
+                  후속 일정 등록
+                </Link>
+              ) : null}
+              <Link
+                className={`${secondaryButtonClassName} h-10 px-4`}
+                href={buildCustomerSearchHref(
+                  activeRecord.customerPhone,
+                  buildReceivablesHref(filters, { page: pagination.page }),
+                )}
+                prefetch={false}
+              >
+                고객 보기
+              </Link>
+              <Link
+                className={`${secondaryButtonClassName} h-10 px-4`}
+                href={buildRelatedSalesHref(activeRecord.customerPhone)}
+                prefetch={false}
+              >
+                관련 판매
+              </Link>
+              <Link
+                className={`${secondaryButtonClassName} h-10 px-4`}
+                href="/schedule"
+                prefetch={false}
+              >
+                일정 관리
+              </Link>
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-2">
               <section className="rounded-[1rem] border border-stone-200 bg-white/90 p-4">
-                <h4 className="text-sm font-semibold text-slate-950">고객 / 판매 정보</h4>
+                <h4 className="text-sm font-semibold text-slate-950">
+                  {getReceivableInfoSectionTitle(activeRecord)}
+                </h4>
                 <div className="mt-3 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <CarrierInlineLabel label={activeRecord.carrierName} />
+                    {activeRecord.isManualEntry ? (
+                      <TonePill label="수동 등록" tone="amber" />
+                    ) : (
+                      <CarrierInlineLabel label={activeRecord.carrierName} />
+                    )}
                     <span className="text-sm font-semibold text-slate-950">
                       {activeRecord.deviceModelName}
                     </span>
                   </div>
                   <div>
-                  <InfoRow label="고객명" value={activeRecord.customerName} />
-                  <InfoRow label="연락처" value={activeRecord.customerPhone} />
-                  <InfoRow label="통신사" value={activeRecord.carrierName} />
-                  <InfoRow label="기종" value={activeRecord.deviceModelName} />
-                  <InfoRow
-                    label="판매 요약"
-                    value={activeRecord.saleSummary}
-                  />
-                  <InfoRow
-                    label="매장"
-                    value={activeRecord.storeName ?? "미지정"}
-                  />
-                  <InfoRow label="담당자" value={activeRecord.staffName} />
+                    <InfoRow label="고객명" value={activeRecord.customerName} />
+                    <InfoRow label="연락처" value={activeRecord.customerPhone} />
+                    <InfoRow label="통신사" value={activeRecord.carrierName} />
+                    <InfoRow label="기종" value={activeRecord.deviceModelName} />
+                    <InfoRow
+                      label={getReceivableSummaryLabel(activeRecord)}
+                      value={activeRecord.saleSummary}
+                    />
+                    <InfoRow
+                      label="매장"
+                      value={activeRecord.storeName ?? "미지정"}
+                    />
+                    <InfoRow label="담당자" value={activeRecord.staffName} />
                   </div>
                 </div>
               </section>
@@ -608,7 +726,7 @@ export function ReceivablesHistoryTable({
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
                 <SummaryCard
-                  label="판매 요약"
+                  label={getReceivableSummaryLabel(activeRecord)}
                   value={activeRecord.saleSummary}
                 />
                 <SummaryCard

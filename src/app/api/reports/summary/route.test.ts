@@ -43,6 +43,8 @@ describe("GET /api/reports/summary", () => {
         preset: "custom",
         dateFrom: "2026-04-01",
         dateTo: "2026-04-12",
+        storeId: "",
+        staffId: "",
       },
     });
     buildDashboardCsv.mockReturnValueOnce("col1,col2\r\n1,2");
@@ -67,6 +69,7 @@ describe("GET /api/reports/summary", () => {
       dateFrom: "2026-04-01",
       dateTo: "2026-04-12",
       storeId: undefined,
+      staffId: undefined,
     });
   });
 });

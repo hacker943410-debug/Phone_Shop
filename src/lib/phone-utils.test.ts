@@ -1,6 +1,5 @@
 import {
   formatPhoneNumber,
-  normalizeImei,
   normalizeMoneyInput,
   normalizePhoneNumber,
 } from "@/lib/phone-utils";
@@ -12,10 +11,6 @@ describe("phone-utils", () => {
 
   it("formats mobile phone numbers with hyphens", () => {
     expect(formatPhoneNumber("01012345678")).toBe("010-1234-5678");
-  });
-
-  it("normalizes imei to 15 digits", () => {
-    expect(normalizeImei("35-209900-176148-1 extra")).toBe("352099001761481");
   });
 
   it("normalizes money input to digits only", () => {

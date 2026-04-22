@@ -1,25 +1,35 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   createBackupAction,
+  createStaffDialogAction,
   restoreBackupAction,
   saveBackupDirectoryAction,
   setDefaultStoreAction,
+  toggleDeviceModelActiveAction,
   toggleAddOnServiceActiveAction,
   toggleCarrierActiveAction,
+  toggleInventoryColorOptionActiveAction,
   toggleRatePlanActiveAction,
+  toggleSalesAgencyActiveAction,
+  toggleStaffActiveAction,
   toggleStoreActiveAction,
   upsertAddOnServiceAction,
   upsertCarrierAction,
+  upsertDeviceModelAction,
+  upsertInventoryColorOptionAction,
   upsertRatePlanAction,
+  upsertSalesAgencyAction,
   upsertStoreAction,
 } from "@/app/actions/base-info";
 import {
   ActiveStatePill,
   EmptyState,
   FormField,
+  NoticeBanner,
   FormSelect,
   FormTextArea,
   SubmitButton,
@@ -45,6 +55,8 @@ import {
   formatRatePlanAllowanceSummary,
   formatWon,
 } from "@/lib/formatters";
+import { buildStaffDialogActionState } from "@/lib/staff-dialog-action-state";
+import { WorkspaceMessageModal } from "@/components/workspace/workspace-alert-dialog";
 
 const surfaceClassName =
   "rounded-[1.25rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.96)_100%)] p-4 shadow-[0_18px_38px_-34px_rgba(15,23,42,0.24)]";
@@ -53,7 +65,11 @@ const formGridClassName = "grid gap-3 md:grid-cols-2";
 
 type BaseInfoTab =
   | "stores"
+  | "staffs"
   | "carriers"
+  | "salesAgencies"
+  | "colors"
+  | "deviceModels"
   | "ratePlans"
   | "addOnServices"
   | "backup"
@@ -61,11 +77,18 @@ type BaseInfoTab =
 
 type BaseInfoModalState =
   | { entity: "store"; mode: "create" }
+  | { entity: "staff"; mode: "create" }
   | { entity: "carrier"; mode: "create" }
+  | { entity: "salesAgency"; mode: "create" }
+  | { entity: "color"; mode: "create" }
+  | { entity: "deviceModel"; mode: "create" }
   | { entity: "ratePlan"; mode: "create" }
   | { entity: "addOnService"; mode: "create" }
   | { entity: "store"; mode: "edit"; id: string }
   | { entity: "carrier"; mode: "edit"; id: string }
+  | { entity: "salesAgency"; mode: "edit"; id: string }
+  | { entity: "color"; mode: "edit"; id: string }
+  | { entity: "deviceModel"; mode: "edit"; id: string }
   | { entity: "ratePlan"; mode: "edit"; id: string }
   | { entity: "addOnService"; mode: "edit"; id: string }
   | null;
@@ -86,6 +109,14 @@ export interface BaseInfoStoreRecord {
   region: string | null;
   isActive: boolean;
   isDefault: boolean;
+}
+
+export interface BaseInfoStaffRecord {
+  id: string;
+  username: string;
+  displayName: string;
+  isActive: boolean;
+  staffCommissionPolicyCount: number;
 }
 
 export interface BaseInfoRatePlanRecord {
@@ -113,6 +144,28 @@ export interface BaseInfoAddOnServiceRecord {
   isActive: boolean;
 }
 
+export interface BaseInfoSalesAgencyRecord {
+  id: string;
+  name: string;
+  isActive: boolean;
+  salesCount: number;
+}
+
+export interface BaseInfoColorRecord {
+  id: string;
+  name: string;
+  isActive: boolean;
+  inventoryCount: number;
+}
+
+export interface BaseInfoDeviceModelRecord {
+  id: string;
+  name: string;
+  manufacturer: string | null;
+  isActive: boolean;
+  inventoryCount: number;
+}
+
 export interface BaseInfoBackupFileRecord {
   fileName: string;
   createdAtLabel: string;
@@ -138,16 +191,29 @@ export type BaseInfoNotice =
 
 export interface BaseInfoOverviewProps {
   stores: BaseInfoStoreRecord[];
+  staffs: BaseInfoStaffRecord[];
   carriers: BaseInfoCarrierRecord[];
+  salesAgencies: BaseInfoSalesAgencyRecord[];
+  colors: BaseInfoColorRecord[];
+  deviceModels: BaseInfoDeviceModelRecord[];
   ratePlans: BaseInfoRatePlanRecord[];
   addOnServices: BaseInfoAddOnServiceRecord[];
   backupState: BaseInfoBackupState;
   initialTab: BaseInfoTab;
   notice: BaseInfoNotice | null;
+  pageEyebrow?: string;
+  pageTitle?: string;
+  visibleTabs?: BaseInfoTab[];
 }
 
 type ServiceCarrierFilter = "all" | "shared" | string;
+type DeviceModelManufacturerFilter = "all" | "Samsung" | "Apple";
 type NoticeTone = "success" | "error";
+
+const deviceModelManufacturerOptions = [
+  { value: "Samsung", label: "삼성" },
+  { value: "Apple", label: "아이폰" },
+] as const;
 
 const backupNoticeMap: Record<
   BaseInfoNotice,
@@ -189,6 +255,14 @@ const backupNoticeMap: Record<
 
 function getCarrierOptionLabel(carrier: BaseInfoCarrierRecord) {
   return carrier.isActive ? carrier.name : `${carrier.name} (비활성)`;
+}
+
+function getDeviceModelManufacturerLabel(manufacturer: string | null) {
+  const matchedOption = deviceModelManufacturerOptions.find(
+    (option) => option.value === manufacturer,
+  );
+
+  return matchedOption?.label ?? "기타";
 }
 
 function TabButton({
@@ -412,6 +486,98 @@ function CarrierForm({
   );
 }
 
+function SalesAgencyForm({
+  initialSalesAgency,
+}: {
+  initialSalesAgency?: BaseInfoSalesAgencyRecord | null;
+}) {
+  return (
+    <form action={upsertSalesAgencyAction} className={`${surfaceClassName} ${formGridClassName}`}>
+      {initialSalesAgency ? (
+        <input name="id" type="hidden" value={initialSalesAgency.id} />
+      ) : null}
+      <FormField
+        autoComplete="off"
+        defaultValue={initialSalesAgency?.name ?? ""}
+        label="거래 대리점명"
+        name="name"
+        placeholder="서초대리점"
+        required
+        wrapperClassName="md:col-span-2"
+      />
+      <div className="flex justify-end md:col-span-2">
+        <SubmitButton label={initialSalesAgency ? "거래 대리점 수정" : "거래 대리점 등록"} />
+      </div>
+    </form>
+  );
+}
+
+function InventoryColorForm({
+  initialColor,
+}: {
+  initialColor?: BaseInfoColorRecord | null;
+}) {
+  return (
+    <form
+      action={upsertInventoryColorOptionAction}
+      className={`${surfaceClassName} ${formGridClassName}`}
+    >
+      {initialColor ? <input name="id" type="hidden" value={initialColor.id} /> : null}
+      <FormField
+        autoComplete="off"
+        defaultValue={initialColor?.name ?? ""}
+        helper="재고 등록 화면의 색상 선택 목록에 바로 반영됩니다."
+        label="색상명"
+        name="name"
+        placeholder="Titan Gray"
+        required
+        wrapperClassName="md:col-span-2"
+      />
+      <div className="flex justify-end md:col-span-2">
+        <SubmitButton label={initialColor ? "색상 수정" : "색상 등록"} />
+      </div>
+    </form>
+  );
+}
+
+function DeviceModelForm({
+  initialDeviceModel,
+}: {
+  initialDeviceModel?: BaseInfoDeviceModelRecord | null;
+}) {
+  return (
+    <form action={upsertDeviceModelAction} className={`${surfaceClassName} ${formGridClassName}`}>
+      {initialDeviceModel ? (
+        <input name="id" type="hidden" value={initialDeviceModel.id} />
+      ) : null}
+      <FormSelect
+        defaultValue={initialDeviceModel?.manufacturer ?? "Samsung"}
+        label="제조사"
+        name="manufacturer"
+        required
+      >
+        {deviceModelManufacturerOptions.map((manufacturer) => (
+          <option key={manufacturer.value} value={manufacturer.value}>
+            {manufacturer.label}
+          </option>
+        ))}
+      </FormSelect>
+      <FormField
+        autoComplete="off"
+        defaultValue={initialDeviceModel?.name ?? ""}
+        helper="재고 등록, 판매 등록, 정책 관리에서 같은 기종 목록으로 연결됩니다."
+        label="기종명"
+        name="name"
+        placeholder="Galaxy S25 Ultra"
+        required
+      />
+      <div className="flex justify-end md:col-span-2">
+        <SubmitButton label={initialDeviceModel ? "기종 수정" : "기종 등록"} />
+      </div>
+    </form>
+  );
+}
+
 function RatePlanForm({
   carriers,
   initialRatePlan,
@@ -545,20 +711,95 @@ function AddOnServiceForm({
   );
 }
 
+function StaffCreateForm({
+  onSuccess,
+}: {
+  onSuccess: () => void;
+}) {
+  const router = useRouter();
+  const [state, formAction, isPending] = useActionState(
+    createStaffDialogAction,
+    buildStaffDialogActionState(),
+  );
+
+  useEffect(() => {
+    if (state.status !== "success") {
+      return;
+    }
+
+    router.refresh();
+    onSuccess();
+  }, [onSuccess, router, state.status]);
+
+  return (
+    <form action={formAction} className={`${surfaceClassName} ${formGridClassName}`}>
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900 md:col-span-2">
+        등록 시 권한은 직원으로 자동 설정되고, 정책 관리 화면의 직원 수수료 정책 선택 목록과
+        바로 연동됩니다.
+      </div>
+      <FormField
+        autoComplete="off"
+        defaultValue={state.fields.displayName}
+        label="직원명"
+        name="displayName"
+        placeholder="홍길동"
+        required
+      />
+      <FormField
+        autoCapitalize="none"
+        autoComplete="username"
+        defaultValue={state.fields.username}
+        helper="영문 소문자, 숫자, 점(.), 밑줄(_), 하이픈(-)만 사용할 수 있습니다."
+        label="로그인 아이디"
+        name="username"
+        placeholder="hong_gd"
+        required
+      />
+      <FormField
+        autoComplete="new-password"
+        defaultValue={state.fields.password}
+        helper="최소 8자 이상 입력해 주세요."
+        label="초기 비밀번호"
+        name="password"
+        placeholder="초기 비밀번호"
+        required
+        type="password"
+      />
+      <div className="rounded-[1.15rem] border border-stone-200 bg-stone-50/90 px-4 py-3">
+        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          등록 권한
+        </p>
+        <p className="mt-2 text-sm font-semibold text-slate-950">직원</p>
+        <p className="mt-1 text-sm leading-6 text-slate-600">
+          신규 등록 계정은 직원 수수료 정책과 판매 담당자 기준으로 바로 사용할 수 있습니다.
+        </p>
+      </div>
+
+
+      <div className="flex justify-end md:col-span-2">
+        <SubmitButton disabled={isPending} label={isPending ? "등록 중..." : "직원 등록"} />
+      </div>
+      <WorkspaceMessageModal
+        message={state.status === "error" ? state.message : null}
+        signal={state}
+        subtitle="Staff Create"
+        title="직원 등록 정보를 확인해 주세요"
+        tone="error"
+      />
+    </form>
+  );
+}
+
 function BackupNoticeBanner({ notice }: { notice: BaseInfoNotice }) {
   const noticeConfig = backupNoticeMap[notice];
 
   return (
-    <section
-      className={joinClassNames(
-        "rounded-[1.2rem] border px-4 py-3 text-sm leading-6 shadow-[0_18px_32px_-30px_rgba(15,23,42,0.22)]",
-        noticeConfig.tone === "success"
-          ? "border-blue-200 bg-blue-50/80 text-blue-900"
-          : "border-rose-200 bg-rose-50/85 text-rose-900",
-      )}
-    >
-      {noticeConfig.message}
-    </section>
+    <NoticeBanner
+      message={noticeConfig.message}
+      subtitle="Backup"
+      title={noticeConfig.tone === "success" ? "백업 작업이 완료되었습니다" : "백업 작업을 확인해 주세요"}
+      tone={noticeConfig.tone === "success" ? "success" : "error"}
+    />
   );
 }
 
@@ -753,25 +994,57 @@ function RestorePanel({ backupState }: { backupState: BaseInfoBackupState }) {
 
 export function BaseInfoOverview({
   stores,
+  staffs,
   carriers,
+  salesAgencies,
+  colors,
+  deviceModels,
   ratePlans,
   addOnServices,
   backupState,
   initialTab,
   notice,
+  pageEyebrow = "Base Info",
+  pageTitle = "기초정보",
+  visibleTabs,
 }: BaseInfoOverviewProps) {
-  const [activeTab, setActiveTab] = useState<BaseInfoTab>(initialTab);
+  const allowedTabs = visibleTabs ?? [
+    "stores",
+    "staffs",
+    "carriers",
+    "salesAgencies",
+    "colors",
+    "deviceModels",
+    "ratePlans",
+    "addOnServices",
+    "backup",
+    "restore",
+  ];
+  const resolvedInitialTab = allowedTabs.includes(initialTab)
+    ? initialTab
+    : (allowedTabs[0] ?? initialTab);
+  const [activeTab, setActiveTab] = useState<BaseInfoTab>(resolvedInitialTab);
   const [modalState, setModalState] = useState<BaseInfoModalState>(null);
   const [ratePlanCarrierFilter, setRatePlanCarrierFilter] = useState("all");
   const [addOnServiceCarrierFilter, setAddOnServiceCarrierFilter] =
     useState<ServiceCarrierFilter>("all");
+  const [deviceModelManufacturerFilter, setDeviceModelManufacturerFilter] =
+    useState<DeviceModelManufacturerFilter>("all");
 
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    setActiveTab(resolvedInitialTab);
+  }, [resolvedInitialTab]);
 
   const activeStoreCount = stores.filter((store) => store.isActive).length;
+  const activeStaffCount = staffs.filter((staff) => staff.isActive).length;
   const activeCarrierCount = carriers.filter((carrier) => carrier.isActive).length;
+  const activeSalesAgencyCount = salesAgencies.filter(
+    (salesAgency) => salesAgency.isActive,
+  ).length;
+  const activeColorCount = colors.filter((color) => color.isActive).length;
+  const activeDeviceModelCount = deviceModels.filter(
+    (deviceModel) => deviceModel.isActive,
+  ).length;
   const activeRatePlanCount = ratePlans.filter((ratePlan) => ratePlan.isActive).length;
   const activeServiceCount = addOnServices.filter((service) => service.isActive).length;
 
@@ -782,6 +1055,18 @@ export function BaseInfoOverview({
   const activeCarrier =
     modalState?.entity === "carrier" && modalState.mode === "edit"
       ? carriers.find((carrier) => carrier.id === modalState.id) ?? null
+      : null;
+  const activeSalesAgency =
+    modalState?.entity === "salesAgency" && modalState.mode === "edit"
+      ? salesAgencies.find((salesAgency) => salesAgency.id === modalState.id) ?? null
+      : null;
+  const activeColor =
+    modalState?.entity === "color" && modalState.mode === "edit"
+      ? colors.find((color) => color.id === modalState.id) ?? null
+      : null;
+  const activeDeviceModel =
+    modalState?.entity === "deviceModel" && modalState.mode === "edit"
+      ? deviceModels.find((deviceModel) => deviceModel.id === modalState.id) ?? null
       : null;
   const activeRatePlan =
     modalState?.entity === "ratePlan" && modalState.mode === "edit"
@@ -807,17 +1092,51 @@ export function BaseInfoOverview({
     return service.carrierId === addOnServiceCarrierFilter;
   });
   const hasSharedAddOnServices = addOnServices.some((service) => service.carrierId === null);
+  const filteredDeviceModels = deviceModels.filter((deviceModel) => {
+    if (deviceModelManufacturerFilter === "all") {
+      return true;
+    }
+
+    return deviceModel.manufacturer === deviceModelManufacturerFilter;
+  });
+  const tabDefinitions: Array<{ id: BaseInfoTab; label: string }> = [
+    { id: "stores", label: "매장 관리" },
+    { id: "staffs", label: "직원 관리" },
+    { id: "carriers", label: "통신사 관리" },
+    { id: "salesAgencies", label: "거래 대리점 관리" },
+    { id: "colors", label: "색상 관리" },
+    { id: "ratePlans", label: "요금제 관리" },
+    { id: "addOnServices", label: "부가서비스 관리" },
+    { id: "backup", label: "백업" },
+    { id: "restore", label: "복원" },
+  ];
+  const tabDefinitionsWithDeviceModels = tabDefinitions.some(
+    (tab) => tab.id === "deviceModels",
+  )
+    ? tabDefinitions
+    : [
+        ...tabDefinitions.slice(0, 5),
+        { id: "deviceModels" as const, label: "기종 관리" },
+        ...tabDefinitions.slice(5),
+      ];
+  const visibleTabDefinitions = tabDefinitionsWithDeviceModels.filter((tab) =>
+    allowedTabs.includes(tab.id),
+  );
+  const showTabMenu = visibleTabDefinitions.length > 1;
 
   return (
-    <div className="flex flex-col gap-4 p-3 sm:p-4 2xl:p-5">
+    <div className="flex flex-col gap-4 p-3 sm:p-4 2xl:p-5" data-page-title={pageTitle}>
       <PageIntro
-        eyebrow="Base Info"
-        title="기초정보"
+        eyebrow={pageEyebrow}
+        title={pageTitle}
         className="shrink-0"
         actions={
           <>
             <ActionChip label={`활성 매장 ${activeStoreCount}`} tone="dark" />
+            <ActionChip label={`활성 직원 ${activeStaffCount}`} />
             <ActionChip label={`활성 통신사 ${activeCarrierCount}`} />
+            <ActionChip label={`거래 대리점 ${activeSalesAgencyCount}`} />
+            <ActionChip label={`색상 ${activeColorCount}`} />
             <ActionChip
               label={`요금제 ${activeRatePlanCount} / 부가서비스 ${activeServiceCount}`}
             />
@@ -854,39 +1173,22 @@ export function BaseInfoOverview({
         />
       </section>
 
-      <Panel title="관리 메뉴" contentClassName="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          <TabButton
-            active={activeTab === "stores"}
-            label="매장 관리"
-            onClick={() => setActiveTab("stores")}
-          />
-          <TabButton
-            active={activeTab === "carriers"}
-            label="통신사 관리"
-            onClick={() => setActiveTab("carriers")}
-          />
-          <TabButton
-            active={activeTab === "ratePlans"}
-            label="요금제 관리"
-            onClick={() => setActiveTab("ratePlans")}
-          />
-          <TabButton
-            active={activeTab === "addOnServices"}
-            label="부가서비스 관리"
-            onClick={() => setActiveTab("addOnServices")}
-          />
-          <TabButton
-            active={activeTab === "backup"}
-            label="백업"
-            onClick={() => setActiveTab("backup")}
-          />
-          <TabButton
-            active={activeTab === "restore"}
-            label="복원"
-            onClick={() => setActiveTab("restore")}
-          />
-        </div>
+      <Panel
+        title={showTabMenu ? "관리 메뉴" : pageTitle}
+        contentClassName="space-y-4"
+      >
+        {showTabMenu ? (
+          <div className="flex flex-wrap gap-2">
+            {visibleTabDefinitions.map((tab) => (
+              <TabButton
+                key={tab.id}
+                active={activeTab === tab.id}
+                label={tab.label}
+                onClick={() => setActiveTab(tab.id)}
+              />
+            ))}
+          </div>
+        ) : null}
 
         {activeTab === "stores" ? (
           <Panel
@@ -994,6 +1296,81 @@ export function BaseInfoOverview({
           </Panel>
         ) : null}
 
+        {activeTab === "staffs" ? (
+          <Panel
+            title="직원 관리"
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <TonePill label={`목록 ${staffs.length}명`} tone="slate" />
+                <button
+                  className={`${primaryButtonClassName} h-10 px-4`}
+                  onClick={() => setModalState({ entity: "staff", mode: "create" })}
+                  type="button"
+                >
+                  신규 직원 등록
+                </button>
+              </div>
+            }
+            contentClassName="space-y-3"
+          >
+            {staffs.length > 0 ? (
+              <TableShell>
+                <TableHeader
+                  headers={[
+                    { label: "직원명" },
+                    { label: "로그인 아이디" },
+                    { label: "연결 정책" },
+                    { label: "상태" },
+                    { label: "작업", align: "right" },
+                  ]}
+                />
+                <tbody className="divide-y divide-stone-200 bg-white">
+                  {staffs.map((staff) => (
+                    <tr key={staff.id} className="hover:bg-stone-50/70">
+                      <TableCell>
+                        <p className="font-semibold text-slate-950">{staff.displayName}</p>
+                      </TableCell>
+                      <TableCell>
+                        <TonePill label={`@${staff.username}`} tone="slate" />
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-slate-600">
+                          직원 수수료 정책 {staff.staffCommissionPolicyCount}개
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ActiveStatePill isActive={staff.isActive} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <form action={toggleStaffActiveAction}>
+                          <input name="id" type="hidden" value={staff.id} />
+                          <input
+                            name="nextActive"
+                            type="hidden"
+                            value={staff.isActive ? "false" : "true"}
+                          />
+                          <ConfirmSubmitButton
+                            className={`${secondaryButtonClassName} h-8 px-3 text-xs`}
+                            confirmMessage={
+                              staff.isActive
+                                ? "이 직원을 비활성화하시겠습니까?"
+                                : "이 직원을 다시 활성화하시겠습니까?"
+                            }
+                          >
+                            {staff.isActive ? "비활성화" : "활성화"}
+                          </ConfirmSubmitButton>
+                        </form>
+                      </TableCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableShell>
+            ) : (
+              <EmptyState message="등록된 직원이 아직 없습니다. 신규 직원 등록으로 계정을 먼저 만들어 주세요." />
+            )}
+          </Panel>
+        ) : null}
+
         {activeTab === "carriers" ? (
           <Panel
             title="통신사 관리"
@@ -1083,6 +1460,284 @@ export function BaseInfoOverview({
               </TableShell>
             ) : (
               <EmptyState message="등록된 통신사가 아직 없습니다." />
+            )}
+          </Panel>
+        ) : null}
+
+        {activeTab === "salesAgencies" ? (
+          <Panel
+            title="거래 대리점 관리"
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <TonePill label={`목록 ${salesAgencies.length}개`} tone="slate" />
+                <button
+                  className={`${primaryButtonClassName} h-10 px-4`}
+                  onClick={() =>
+                    setModalState({ entity: "salesAgency", mode: "create" })
+                  }
+                  type="button"
+                >
+                  신규 거래 대리점 등록
+                </button>
+              </div>
+            }
+            contentClassName="space-y-3"
+          >
+            {salesAgencies.length > 0 ? (
+              <TableShell>
+                <TableHeader
+                  headers={[
+                    { label: "거래 대리점" },
+                    { label: "연결 판매" },
+                    { label: "상태" },
+                    { label: "작업", align: "right" },
+                  ]}
+                />
+                <tbody className="divide-y divide-stone-200 bg-white">
+                  {salesAgencies.map((salesAgency) => (
+                    <tr key={salesAgency.id} className="hover:bg-stone-50/70">
+                      <TableCell>
+                        <p className="font-semibold text-slate-950">{salesAgency.name}</p>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-slate-600">
+                          판매 {salesAgency.salesCount}건
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ActiveStatePill isActive={salesAgency.isActive} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <div className="flex justify-end gap-2">
+                          <form action={toggleSalesAgencyActiveAction}>
+                            <input name="id" type="hidden" value={salesAgency.id} />
+                            <input
+                              name="nextActive"
+                              type="hidden"
+                              value={salesAgency.isActive ? "false" : "true"}
+                            />
+                            <ConfirmSubmitButton
+                              className={`${secondaryButtonClassName} h-8 px-3 text-xs`}
+                              confirmMessage={
+                                salesAgency.isActive
+                                  ? `${salesAgency.name} 거래 대리점을 비활성화하시겠습니까?`
+                                  : `${salesAgency.name} 거래 대리점을 다시 활성화하시겠습니까?`
+                              }
+                            >
+                              {salesAgency.isActive ? "비활성화" : "활성화"}
+                            </ConfirmSubmitButton>
+                          </form>
+                          <ActionIconButton
+                            label={`${salesAgency.name} 수정`}
+                            onClick={() =>
+                              setModalState({
+                                entity: "salesAgency",
+                                mode: "edit",
+                                id: salesAgency.id,
+                              })
+                            }
+                          />
+                        </div>
+                      </TableCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableShell>
+            ) : (
+              <EmptyState message="등록된 거래 대리점이 아직 없습니다." />
+            )}
+          </Panel>
+        ) : null}
+
+        {activeTab === "colors" ? (
+          <Panel
+            title="색상 관리"
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <TonePill label={`목록 ${colors.length}개`} tone="slate" />
+                <button
+                  className={`${primaryButtonClassName} h-10 px-4`}
+                  onClick={() => setModalState({ entity: "color", mode: "create" })}
+                  type="button"
+                >
+                  신규 색상 등록
+                </button>
+              </div>
+            }
+            contentClassName="space-y-3"
+          >
+            {colors.length > 0 ? (
+              <TableShell>
+                <TableHeader
+                  headers={[
+                    { label: "색상명" },
+                    { label: "연결 재고" },
+                    { label: "상태" },
+                    { label: "작업", align: "right" },
+                  ]}
+                />
+                <tbody className="divide-y divide-stone-200 bg-white">
+                  {colors.map((color) => (
+                    <tr key={color.id} className="hover:bg-stone-50/70">
+                      <TableCell>
+                        <p className="font-semibold text-slate-950">{color.name}</p>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-slate-600">
+                          재고 {color.inventoryCount}대
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ActiveStatePill isActive={color.isActive} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <div className="flex justify-end gap-2">
+                          <form action={toggleInventoryColorOptionActiveAction}>
+                            <input name="id" type="hidden" value={color.id} />
+                            <input
+                              name="nextActive"
+                              type="hidden"
+                              value={color.isActive ? "false" : "true"}
+                            />
+                            <ConfirmSubmitButton
+                              className={`${secondaryButtonClassName} h-8 px-3 text-xs`}
+                              confirmMessage={
+                                color.isActive
+                                  ? `${color.name} 색상을 비활성화하시겠습니까?`
+                                  : `${color.name} 색상을 다시 활성화하시겠습니까?`
+                              }
+                            >
+                              {color.isActive ? "비활성화" : "활성화"}
+                            </ConfirmSubmitButton>
+                          </form>
+                          <ActionIconButton
+                            label={`${color.name} 수정`}
+                            onClick={() =>
+                              setModalState({
+                                entity: "color",
+                                mode: "edit",
+                                id: color.id,
+                              })
+                            }
+                          />
+                        </div>
+                      </TableCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableShell>
+            ) : (
+              <EmptyState message="등록된 색상이 아직 없습니다. 재고 등록 전에 먼저 색상을 추가해 주세요." />
+            )}
+          </Panel>
+        ) : null}
+
+        {activeTab === "deviceModels" ? (
+          <Panel
+            title="기종 관리"
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <TonePill
+                  label={`목록 ${filteredDeviceModels.length}개 / 활성 ${activeDeviceModelCount}개`}
+                  tone="slate"
+                />
+                <button
+                  className={`${primaryButtonClassName} h-10 px-4`}
+                  onClick={() => setModalState({ entity: "deviceModel", mode: "create" })}
+                  type="button"
+                >
+                  신규 기종 등록
+                </button>
+              </div>
+            }
+            contentClassName="space-y-3"
+          >
+            <div className="flex flex-wrap gap-2">
+              <FilterButton
+                active={deviceModelManufacturerFilter === "all"}
+                label="전체"
+                onClick={() => setDeviceModelManufacturerFilter("all")}
+              />
+              {deviceModelManufacturerOptions.map((manufacturer) => (
+                <FilterButton
+                  key={manufacturer.value}
+                  active={deviceModelManufacturerFilter === manufacturer.value}
+                  label={manufacturer.label}
+                  onClick={() =>
+                    setDeviceModelManufacturerFilter(manufacturer.value)
+                  }
+                />
+              ))}
+            </div>
+            {filteredDeviceModels.length > 0 ? (
+              <TableShell>
+                <TableHeader
+                  headers={[
+                    { label: "기종명" },
+                    { label: "제조사" },
+                    { label: "연결 재고" },
+                    { label: "상태" },
+                    { label: "작업", align: "right" },
+                  ]}
+                />
+                <tbody className="divide-y divide-stone-200 bg-white">
+                  {filteredDeviceModels.map((deviceModel) => (
+                    <tr key={deviceModel.id} className="hover:bg-stone-50/70">
+                      <TableCell>
+                        <p className="font-semibold text-slate-950">{deviceModel.name}</p>
+                      </TableCell>
+                      <TableCell>
+                        <TonePill
+                          label={getDeviceModelManufacturerLabel(deviceModel.manufacturer)}
+                          tone={deviceModel.manufacturer === "Samsung" ? "amber" : "slate"}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-slate-600">
+                          재고 {deviceModel.inventoryCount}대
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ActiveStatePill isActive={deviceModel.isActive} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <div className="flex justify-end gap-2">
+                          <form action={toggleDeviceModelActiveAction}>
+                            <input name="id" type="hidden" value={deviceModel.id} />
+                            <input
+                              name="nextActive"
+                              type="hidden"
+                              value={deviceModel.isActive ? "false" : "true"}
+                            />
+                            <ConfirmSubmitButton
+                              className={`${secondaryButtonClassName} h-8 px-3 text-xs`}
+                              confirmMessage={
+                                deviceModel.isActive
+                                  ? `${deviceModel.name} 기종을 비활성화하시겠습니까?`
+                                  : `${deviceModel.name} 기종을 다시 활성화하시겠습니까?`
+                              }
+                            >
+                              {deviceModel.isActive ? "비활성화" : "활성화"}
+                            </ConfirmSubmitButton>
+                          </form>
+                          <ActionIconButton
+                            label={`${deviceModel.name} 수정`}
+                            onClick={() =>
+                              setModalState({
+                                entity: "deviceModel",
+                                mode: "edit",
+                                id: deviceModel.id,
+                              })
+                            }
+                          />
+                        </div>
+                      </TableCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableShell>
+            ) : (
+              <EmptyState message="선택한 제조사에 맞는 기종이 없습니다." />
             )}
           </Panel>
         ) : null}
@@ -1372,6 +2027,18 @@ export function BaseInfoOverview({
         </WorkspaceModalShell>
       ) : null}
 
+      {modalState?.entity === "staff" ? (
+        <WorkspaceModalShell
+          contentClassName="sm:px-6"
+          maxWidthClassName="max-w-3xl"
+          onClose={() => setModalState(null)}
+          subtitle="직원"
+          title="신규 직원 등록"
+        >
+          <StaffCreateForm onSuccess={() => setModalState(null)} />
+        </WorkspaceModalShell>
+      ) : null}
+
       {modalState?.entity === "carrier" ? (
         <WorkspaceModalShell
           contentClassName="sm:px-6"
@@ -1381,6 +2048,46 @@ export function BaseInfoOverview({
           title={modalState.mode === "create" ? "신규 통신사 등록" : "통신사 수정"}
         >
           <CarrierForm initialCarrier={activeCarrier} />
+        </WorkspaceModalShell>
+      ) : null}
+
+      {modalState?.entity === "salesAgency" ? (
+        <WorkspaceModalShell
+          contentClassName="sm:px-6"
+          maxWidthClassName="max-w-3xl"
+          onClose={() => setModalState(null)}
+          subtitle="거래 대리점"
+          title={
+            modalState.mode === "create"
+              ? "신규 거래 대리점 등록"
+              : "거래 대리점 수정"
+          }
+        >
+          <SalesAgencyForm initialSalesAgency={activeSalesAgency} />
+        </WorkspaceModalShell>
+      ) : null}
+
+      {modalState?.entity === "color" ? (
+        <WorkspaceModalShell
+          contentClassName="sm:px-6"
+          maxWidthClassName="max-w-3xl"
+          onClose={() => setModalState(null)}
+          subtitle="색상"
+          title={modalState.mode === "create" ? "신규 색상 등록" : "색상 수정"}
+        >
+          <InventoryColorForm initialColor={activeColor} />
+        </WorkspaceModalShell>
+      ) : null}
+
+      {modalState?.entity === "deviceModel" ? (
+        <WorkspaceModalShell
+          contentClassName="sm:px-6"
+          maxWidthClassName="max-w-3xl"
+          onClose={() => setModalState(null)}
+          subtitle="기종"
+          title={modalState.mode === "create" ? "신규 기종 등록" : "기종 수정"}
+        >
+          <DeviceModelForm initialDeviceModel={activeDeviceModel} />
         </WorkspaceModalShell>
       ) : null}
 

@@ -173,7 +173,9 @@ export function SalesSupportPanel({
                   <p className="mt-1 text-sm text-slate-600">
                     {item.color} / {item.capacity}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">IMEI {item.imei}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    S/N {item.serialNumber} / Model No. {item.modelNumber}
+                  </p>
                 </article>
               ))
             ) : (

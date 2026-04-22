@@ -59,6 +59,7 @@ export default async function NewSalePage({
             defaultSaleDate={pageData.defaultSaleDate}
             customers={pageData.customers}
             carriers={pageData.carriers}
+            salesAgencies={pageData.salesAgencies}
             availableInventory={pageData.availableInventory}
             discountPolicies={pageData.discountPolicies}
             saleProfitPolicies={pageData.saleProfitPolicies}

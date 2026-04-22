@@ -5,6 +5,7 @@ import {
   isValidElement,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -19,6 +20,17 @@ import {
   formControlClassName,
   joinClassNames,
 } from "@/components/workspace/ui-classnames";
+import {
+  countDigitsBeforeCaret,
+  extractCurrencyDigits,
+  formatCurrencyInputDisplay,
+  resolveCurrencyCaretPosition,
+} from "@/lib/currency-input";
+import {
+  countModelNumberCharactersBeforeCaret,
+  formatModelNumberInput,
+  resolveModelNumberCaretPosition,
+} from "@/lib/model-number-input";
 
 interface ChoiceOption {
   value: string;
@@ -1013,5 +1025,241 @@ export function DateControl({
       )
         : null}
     </div>
+  );
+}
+
+export interface CurrencyControlProps extends BaseTriggerProps {
+  defaultValue?: string | number | readonly string[];
+  value?: string | number | readonly string[];
+  placeholder?: string;
+  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+  onValueChange?: (value: string) => void;
+}
+
+function normalizeCurrencyValue(
+  value: string | number | readonly string[] | undefined,
+) {
+  return extractCurrencyDigits(normalizeControlValue(value));
+}
+
+function formatCurrencyPlaceholder(placeholder?: string) {
+  if (!placeholder) {
+    return "숫자만 입력";
+  }
+
+  const digits = extractCurrencyDigits(placeholder);
+
+  if (!digits) {
+    return placeholder;
+  }
+
+  return `${formatCurrencyInputDisplay(digits)}원`;
+}
+
+export function CurrencyControl({
+  autoFocus,
+  className,
+  defaultValue,
+  disabled,
+  id,
+  name,
+  onChange,
+  onValueChange,
+  placeholder,
+  required,
+  tabIndex,
+  title,
+  value,
+  "aria-describedby": ariaDescribedBy,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
+}: CurrencyControlProps) {
+  const isControlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(
+    normalizeCurrencyValue(defaultValue),
+  );
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const pendingDigitsBeforeCaretRef = useRef<number | null>(null);
+  const rawValue = isControlled ? normalizeCurrencyValue(value) : internalValue;
+  const displayValue = formatCurrencyInputDisplay(rawValue);
+  const suffixVisible = displayValue.length > 0;
+
+  useLayoutEffect(() => {
+    if (
+      pendingDigitsBeforeCaretRef.current === null ||
+      !inputRef.current ||
+      document.activeElement !== inputRef.current
+    ) {
+      return;
+    }
+
+    const nextCaretPosition = resolveCurrencyCaretPosition(
+      displayValue,
+      pendingDigitsBeforeCaretRef.current,
+    );
+
+    inputRef.current.setSelectionRange(nextCaretPosition, nextCaretPosition);
+    pendingDigitsBeforeCaretRef.current = null;
+  }, [displayValue]);
+
+  function commitValue(nextRawValue: string) {
+    if (!isControlled) {
+      setInternalValue(nextRawValue);
+    }
+
+    onValueChange?.(nextRawValue);
+    onChange?.(createSyntheticChangeEvent<HTMLInputElement>(name, nextRawValue));
+  }
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    pendingDigitsBeforeCaretRef.current = countDigitsBeforeCaret(
+      event.target.value,
+      event.target.selectionStart,
+    );
+    commitValue(extractCurrencyDigits(event.target.value));
+  }
+
+  return (
+    <div className="relative w-full">
+      <input
+        ref={inputRef}
+        aria-describedby={ariaDescribedBy}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
+        autoFocus={autoFocus}
+        className={joinClassNames(
+          formControlClassName,
+          "pr-14",
+          disabled &&
+            "cursor-not-allowed border-stone-200 bg-stone-100 text-slate-400 shadow-none",
+          className,
+        )}
+        disabled={disabled}
+        id={id}
+        inputMode="numeric"
+        name={name}
+        onChange={handleChange}
+        placeholder={formatCurrencyPlaceholder(placeholder)}
+        required={required}
+        tabIndex={tabIndex}
+        title={title}
+        type="text"
+        value={displayValue}
+      />
+      <span
+        aria-hidden="true"
+        className={joinClassNames(
+          "pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400 transition-opacity",
+          suffixVisible ? "opacity-100" : "opacity-0",
+        )}
+      >
+        원
+      </span>
+    </div>
+  );
+}
+
+export interface ModelNumberControlProps extends BaseTriggerProps {
+  defaultValue?: string | number | readonly string[];
+  value?: string | number | readonly string[];
+  placeholder?: string;
+  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+  onValueChange?: (value: string) => void;
+}
+
+function normalizeModelNumberValue(
+  value: string | number | readonly string[] | undefined,
+) {
+  return formatModelNumberInput(normalizeControlValue(value));
+}
+
+export function ModelNumberControl({
+  autoFocus,
+  className,
+  defaultValue,
+  disabled,
+  id,
+  name,
+  onChange,
+  onValueChange,
+  placeholder,
+  required,
+  tabIndex,
+  title,
+  value,
+  "aria-describedby": ariaDescribedBy,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
+}: ModelNumberControlProps) {
+  const isControlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(
+    normalizeModelNumberValue(defaultValue),
+  );
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const pendingCharactersBeforeCaretRef = useRef<number | null>(null);
+  const resolvedValue = isControlled ? normalizeModelNumberValue(value) : internalValue;
+
+  useLayoutEffect(() => {
+    if (
+      pendingCharactersBeforeCaretRef.current === null ||
+      !inputRef.current ||
+      document.activeElement !== inputRef.current
+    ) {
+      return;
+    }
+
+    const nextCaretPosition = resolveModelNumberCaretPosition(
+      resolvedValue,
+      pendingCharactersBeforeCaretRef.current,
+    );
+
+    inputRef.current.setSelectionRange(nextCaretPosition, nextCaretPosition);
+    pendingCharactersBeforeCaretRef.current = null;
+  }, [resolvedValue]);
+
+  function commitValue(nextValue: string) {
+    if (!isControlled) {
+      setInternalValue(nextValue);
+    }
+
+    onValueChange?.(nextValue);
+    onChange?.(createSyntheticChangeEvent<HTMLInputElement>(name, nextValue));
+  }
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    pendingCharactersBeforeCaretRef.current = countModelNumberCharactersBeforeCaret(
+      event.target.value,
+      event.target.selectionStart,
+    );
+    commitValue(formatModelNumberInput(event.target.value));
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      aria-describedby={ariaDescribedBy}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      autoCapitalize="characters"
+      autoCorrect="off"
+      autoFocus={autoFocus}
+      className={joinClassNames(
+        formControlClassName,
+        disabled &&
+          "cursor-not-allowed border-stone-200 bg-stone-100 text-slate-400 shadow-none",
+        className,
+      )}
+      disabled={disabled}
+      id={id}
+      name={name}
+      onChange={handleChange}
+      placeholder={placeholder ?? "SM-3028RKSPEW"}
+      required={required}
+      spellCheck={false}
+      tabIndex={tabIndex}
+      title={title}
+      type="text"
+      value={resolvedValue}
+    />
   );
 }

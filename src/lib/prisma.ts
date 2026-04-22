@@ -1,5 +1,7 @@
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { PrismaClient } from "../../prisma/generated/client/client";
+import { PrismaClient as PrismaClientClass } from "../../prisma/generated/client/client";
+
+type PrismaClient = InstanceType<typeof PrismaClientClass>;
 
 const adapter = new PrismaBetterSqlite3(
   { url: process.env.DATABASE_URL || "file:./prisma/dev.db" },
@@ -11,7 +13,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  return new PrismaClient({
+  return new PrismaClientClass({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
@@ -26,8 +28,15 @@ function hasRequiredDelegates(
 
   // In dev, a globally cached client can survive schema changes and miss new delegates
   // until the process is restarted. Rebuild it when the current schema's delegate is absent.
-  return typeof (client as PrismaClient & { manualSchedule?: { findMany?: unknown } })
-    .manualSchedule?.findMany === "function";
+  const delegateAwareClient = client as PrismaClient & {
+    manualSchedule?: { findMany?: unknown };
+    salesAgency?: { findMany?: unknown };
+  };
+
+  return (
+    typeof delegateAwareClient.manualSchedule?.findMany === "function" &&
+    typeof delegateAwareClient.salesAgency?.findMany === "function"
+  );
 }
 
 function getPrismaClient() {

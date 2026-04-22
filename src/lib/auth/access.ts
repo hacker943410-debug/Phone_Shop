@@ -48,6 +48,11 @@ export const workspaceNavigation: WorkspaceNavigationItem[] = [
     roles: ["ADMIN", "STAFF"],
   },
   {
+    href: "/staffs",
+    label: "직원 관리",
+    roles: ["ADMIN"],
+  },
+  {
     href: "/settings/base",
     label: "기초정보",
     roles: ["ADMIN"],
@@ -70,7 +75,11 @@ export function isProtectedPath(pathname: string) {
 }
 
 export function canAccessPath(pathname: string, role: AuthRole) {
-  if (pathname.startsWith("/settings")) {
+  if (
+    pathname.startsWith("/settings") ||
+    pathname === "/staffs" ||
+    pathname.startsWith("/staffs/")
+  ) {
     return role === "ADMIN";
   }
 

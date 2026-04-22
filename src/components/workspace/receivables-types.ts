@@ -4,6 +4,8 @@ export type ReceivableStatusValue = "UNPAID" | "PARTIALLY_PAID" | "PAID";
 
 export type ReceivablesNotice =
   | "invalid-payment-form"
+  | "invalid-manual-receivable-form"
+  | "manual-receivable-customer-not-found"
   | "receivable-not-found"
   | "payment-not-found"
   | "payment-cancel-reason-required"
@@ -36,17 +38,18 @@ export interface ReceivablePaymentRecord {
 
 export interface ReceivableRecord {
   id: string;
-  saleId: string;
+  saleId: string | null;
   customerId: string;
-  carrierId: string;
+  carrierId: string | null;
   customerName: string;
   customerPhone: string;
-  saleDate: Date;
+  referenceDate: Date;
   carrierName: string;
   deviceModelName: string;
   saleSummary: string;
   storeName: string | null;
   staffName: string;
+  isManualEntry: boolean;
   originalAmount: number;
   paidAmount: number;
   balanceAmount: number;

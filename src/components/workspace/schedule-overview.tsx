@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
+  type ScheduleInitialDialogState,
   type ScheduleManualScheduleItem,
   type ScheduleOverviewPageData,
 } from "@/app/(workspace)/schedule/schedule-page-data";
 import { EmptyState } from "@/components/workspace/admin-form-controls";
-import { ScheduleUpsertDialog } from "@/components/workspace/schedule-upsert-dialog";
+import {
+  ScheduleUpsertDialog,
+  type ScheduleDialogSeed,
+} from "@/components/workspace/schedule-upsert-dialog";
 import {
   ActionChip,
   MetricCard,
@@ -16,7 +21,11 @@ import {
   TonePill,
 } from "@/components/workspace/workspace-primitives";
 import { secondaryButtonClassName } from "@/components/workspace/ui-classnames";
-import type { ScheduleEventKind, ScheduleEventRecord } from "@/lib/schedule";
+import type {
+  ScheduleCalendarDay,
+  ScheduleEventKind,
+  ScheduleEventRecord,
+} from "@/lib/schedule";
 
 const cardSurfaceClassName =
   "rounded-[1.2rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,239,0.96)_100%)] p-4 shadow-[0_18px_38px_-34px_rgba(15,23,42,0.24)]";
@@ -28,18 +37,7 @@ const weekdayLabels = ["일", "월", "화", "수", "목", "금", "토"];
 
 interface ScheduleDialogState {
   defaultDateInput: string;
-  initialSchedule: ScheduleManualScheduleItem | null;
-}
-
-function getHolidayInfoTone(status: ScheduleOverviewPageData["holidayInfo"]["status"]) {
-  switch (status) {
-    case "api":
-      return "teal" as const;
-    case "cache":
-      return "slate" as const;
-    case "error":
-      return "rose" as const;
-  }
+  initialSchedule: ScheduleDialogSeed | null;
 }
 
 function buildMonthHref(monthInput: string) {
@@ -51,7 +49,7 @@ function getEventKindLabel(kind: ScheduleEventKind) {
     case "HOLIDAY":
       return "공휴일";
     case "RETENTION_DUE":
-      return "유지만료";
+      return "유지 만료";
     case "SALE_COMPLETED":
       return "판매";
     case "PAYMENT_COMPLETED":
@@ -94,7 +92,7 @@ function getEventFrame(kind: ScheduleEventKind) {
 function getManualStatusLabel(status: ScheduleEventRecord["manualStatus"]) {
   switch (status) {
     case "OPEN":
-      return "진행중";
+      return "진행 중";
     case "DONE":
       return "완료";
     case "CANCELED":
@@ -115,6 +113,14 @@ function getManualStatusTone(status: ScheduleEventRecord["manualStatus"]) {
     default:
       return "slate" as const;
   }
+}
+
+function getHolidayEvent(day: ScheduleCalendarDay) {
+  return day.events.find((event) => event.kind === "HOLIDAY") ?? null;
+}
+
+function getVisibleCalendarEvents(day: ScheduleCalendarDay) {
+  return day.events.filter((event) => event.kind !== "HOLIDAY");
 }
 
 function EventLine({
@@ -149,11 +155,13 @@ function EventLine({
   );
 
   if (event.kind === "MANUAL" && event.manualScheduleId) {
+    const manualScheduleId = event.manualScheduleId;
+
     return (
       <button
         aria-label={`${event.title} 일정 수정`}
         className={`w-full rounded-[0.9rem] border px-2.5 py-2 text-left text-[0.74rem] leading-5 transition hover:brightness-[1.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${frameClassName}`}
-        onClick={() => onEditManualSchedule(event.manualScheduleId!)}
+        onClick={() => onEditManualSchedule(manualScheduleId)}
         type="button"
       >
         {content}
@@ -170,66 +178,6 @@ function EventLine({
   );
 }
 
-function ManualScheduleSummaryCard({
-  event,
-  onEdit,
-}: {
-  event: ScheduleEventRecord;
-  onEdit: (scheduleId: string) => void;
-}) {
-  if (!event.manualScheduleId) {
-    return (
-      <div className="rounded-[1rem] border border-stone-200 bg-white/90 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-slate-950">
-              {event.dateInput} · {event.title}
-            </p>
-            {event.subtitle ? (
-              <p className="text-sm leading-6 text-slate-600">{event.subtitle}</p>
-            ) : null}
-          </div>
-          {event.manualStatus ? (
-            <TonePill
-              label={getManualStatusLabel(event.manualStatus) || "상태 없음"}
-              tone={getManualStatusTone(event.manualStatus)}
-            />
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      aria-label={`${event.title} 일정 수정`}
-      className={interactiveCardClassName}
-      onClick={() => onEdit(event.manualScheduleId!)}
-      type="button"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-slate-950">
-            {event.dateInput} · {event.title}
-          </p>
-          {event.subtitle ? (
-            <p className="text-sm leading-6 text-slate-600">{event.subtitle}</p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          {event.manualStatus ? (
-            <TonePill
-              label={getManualStatusLabel(event.manualStatus) || "상태 없음"}
-              tone={getManualStatusTone(event.manualStatus)}
-            />
-          ) : null}
-          <span className="text-[0.72rem] font-semibold text-slate-500">수정</span>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 function UpcomingEventCard({
   event,
   onEditManualSchedule,
@@ -237,9 +185,6 @@ function UpcomingEventCard({
   event: ScheduleEventRecord;
   onEditManualSchedule: (scheduleId: string) => void;
 }) {
-  const isManual = Boolean(event.manualScheduleId);
-  const wrapperClassName = isManual ? interactiveCardClassName : cardSurfaceClassName;
-
   const content = (
     <div className="flex items-start justify-between gap-3">
       <div className="space-y-1">
@@ -250,24 +195,23 @@ function UpcomingEventCard({
           <p className="text-sm leading-6 text-slate-600">{event.subtitle}</p>
         ) : null}
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-2">
+      <div className="shrink-0">
         <TonePill
           label={getEventKindLabel(event.kind)}
           tone={getEventTone(event.kind)}
         />
-        {isManual ? (
-          <span className="text-[0.72rem] font-semibold text-slate-500">수정</span>
-        ) : null}
       </div>
     </div>
   );
 
   if (event.manualScheduleId) {
+    const manualScheduleId = event.manualScheduleId;
+
     return (
       <button
         aria-label={`${event.title} 일정 수정`}
-        className={wrapperClassName}
-        onClick={() => onEditManualSchedule(event.manualScheduleId!)}
+        className={interactiveCardClassName}
+        onClick={() => onEditManualSchedule(manualScheduleId)}
         type="button"
       >
         {content}
@@ -275,15 +219,72 @@ function UpcomingEventCard({
     );
   }
 
-  return <div className={wrapperClassName}>{content}</div>;
+  return <div className={cardSurfaceClassName}>{content}</div>;
+}
+
+function WorkQueueCard({
+  description,
+  items,
+  title,
+}: {
+  description: string;
+  items: React.ReactNode[];
+  title: string;
+}) {
+  return (
+    <article className="rounded-[1.2rem] border border-stone-200 bg-white/92 p-4 shadow-[0_18px_38px_-34px_rgba(15,23,42,0.24)]">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-base font-semibold tracking-[-0.03em] text-slate-950">
+          {title}
+        </h3>
+        <TonePill label={`${items.length}건`} tone="charcoal" />
+      </div>
+      <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+      <div className="mt-3 space-y-2">
+        {items.length > 0 ? (
+          items
+        ) : (
+          <EmptyState message="현재 확인할 항목이 없습니다." />
+        )}
+      </div>
+    </article>
+  );
 }
 
 export function ScheduleOverview({
+  initialDialogState = null,
   pageData,
 }: {
+  initialDialogState?: ScheduleInitialDialogState | null;
   pageData: ScheduleOverviewPageData;
 }) {
-  const [dialogState, setDialogState] = useState<ScheduleDialogState | null>(null);
+  const router = useRouter();
+  const [dialogState, setDialogState] = useState<ScheduleDialogState | null>(
+    initialDialogState,
+  );
+  const todayEvents = useMemo(
+    () =>
+      pageData.highlightEvents.filter((event) => event.dateInput === pageData.todayInput),
+    [pageData.highlightEvents, pageData.todayInput],
+  );
+  const pendingManualSchedules = useMemo(
+    () =>
+      [...pageData.manualScheduleItems]
+        .filter(
+          (item) =>
+            item.status === "OPEN" && item.scheduledDate <= pageData.todayInput,
+        )
+        .sort((left, right) => left.scheduledDate.localeCompare(right.scheduledDate, "ko-KR"))
+        .slice(0, 8),
+    [pageData.manualScheduleItems, pageData.todayInput],
+  );
+  const retentionQueue = useMemo(
+    () =>
+      pageData.retentionAlerts
+        .filter((item) => item.daysUntil >= 0)
+        .slice(0, 8),
+    [pageData.retentionAlerts],
+  );
 
   const openCreateDialog = (dateInput: string) => {
     setDialogState({
@@ -309,6 +310,14 @@ export function ScheduleOverview({
     setDialogState(null);
   };
 
+  useEffect(() => {
+    if (!initialDialogState) {
+      return;
+    }
+
+    router.replace(buildMonthHref(pageData.month.monthInput), { scroll: false });
+  }, [initialDialogState, pageData.month.monthInput, router]);
+
   return (
     <>
       <div className="flex flex-col gap-3 p-3 sm:p-4 2xl:p-5">
@@ -327,19 +336,19 @@ export function ScheduleOverview({
         <section className="grid shrink-0 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
           <MetricCard
             accent="amber"
-            helper="오늘부터 3일 이내 재개통 가능 고객 수"
-            label="3일 내 유지만료"
+            helper="오늘부터 3일 이내 재연락 가능 고객 수"
+            label="3일 내 유지 만료"
             value={`${pageData.metrics.retentionDueIn3Days}건`}
           />
           <MetricCard
             accent="teal"
-            helper="오늘부터 7일 이내 재개통 가능 고객 수"
-            label="7일 내 유지만료"
+            helper="오늘부터 7일 이내 재연락 가능 고객 수"
+            label="7일 내 유지 만료"
             value={`${pageData.metrics.retentionDueIn7Days}건`}
           />
           <MetricCard
             accent="slate"
-            helper="공휴일, 유지만료, 판매, 수납 자동 이벤트 합계"
+            helper="공휴일, 유지 만료, 판매, 수납 자동 이벤트 합계"
             label="월간 자동 일정"
             value={`${pageData.metrics.automaticScheduleCount}건`}
           />
@@ -351,10 +360,72 @@ export function ScheduleOverview({
           />
         </section>
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section className="grid gap-3 xl:grid-cols-3">
+          <WorkQueueCard
+            title="오늘 예정"
+            description="오늘 바로 처리해야 하는 일정만 먼저 모았습니다."
+            items={todayEvents.map((event) => (
+              <UpcomingEventCard
+                key={event.id}
+                event={event}
+                onEditManualSchedule={openEditDialog}
+              />
+            ))}
+          />
+          <WorkQueueCard
+            title="미처리 수동 일정"
+            description="오늘 이전 일정 중 아직 열려 있는 수동 일정입니다."
+            items={pendingManualSchedules.map((item) => (
+              <button
+                key={item.id}
+                className={interactiveCardClassName}
+                onClick={() => openEditDialog(item.id)}
+                type="button"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-950">
+                      {item.scheduledDate} · {item.title}
+                    </p>
+                    <p className="text-sm leading-6 text-slate-600">
+                      {[item.customerName, item.saleLabel, item.memo]
+                        .filter(Boolean)
+                        .join(" / ") || "상세 메모 없음"}
+                    </p>
+                  </div>
+                  <TonePill label="미처리" tone="amber" />
+                </div>
+              </button>
+            ))}
+          />
+          <WorkQueueCard
+            title="유지 만료 임박"
+            description="7일 이내 재연락 가능한 고객을 빠르게 확인합니다."
+            items={retentionQueue.map((item) => (
+              <div key={`${item.customerName}:${item.eligibleDate}`} className={cardSurfaceClassName}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-950">
+                      {item.customerName}
+                    </p>
+                    <p className="text-sm leading-6 text-slate-600">
+                      {item.carrierName} / 가능일 {item.eligibleDate}
+                    </p>
+                  </div>
+                  <TonePill
+                    label={item.daysUntil === 0 ? "D-day" : `D-${item.daysUntil}`}
+                    tone={item.daysUntil <= 3 ? "rose" : "amber"}
+                  />
+                </div>
+              </div>
+            ))}
+          />
+        </section>
+
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <Panel
             title="월간 캘린더"
-            description="자동 일정과 수동 일정을 한 화면에서 확인합니다."
+            description="판매, 수납, 유지 만료, 수동 일정을 한 화면에서 확인합니다."
             actions={
               <div className="flex flex-wrap gap-2">
                 <a
@@ -409,159 +480,116 @@ export function ScheduleOverview({
                     key={`${pageData.month.monthInput}-week-${weekIndex}`}
                     className="grid grid-cols-7"
                   >
-                    {week.map((day) => (
-                      <article
-                        key={day.dateInput}
-                        className={[
-                          "min-h-[10.2rem] border-b border-r border-stone-200 px-2.5 py-2.5",
-                          !day.isCurrentMonth && "bg-stone-100/70 text-slate-400",
-                          day.isWeekend && day.isCurrentMonth && "bg-stone-50/65",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <button
-                            aria-label={`${day.dateInput} 일정 추가`}
-                            className={[
-                              "inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-semibold tracking-[-0.04em] transition hover:bg-slate-200/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900",
-                              day.isToday
-                                ? "bg-slate-950 text-white hover:bg-slate-800"
-                                : day.isCurrentMonth
-                                  ? "text-slate-950"
-                                  : "text-slate-400",
-                            ].join(" ")}
-                            onClick={() => openCreateDialog(day.dateInput)}
-                            type="button"
-                          >
-                            {day.dayNumber}
-                          </button>
-                          {day.events.length > 0 ? (
-                            <span className="text-[0.68rem] font-medium text-slate-500">
-                              {day.events.length}건
-                            </span>
-                          ) : null}
-                        </div>
+                    {week.map((day) => {
+                      const holidayEvent = getHolidayEvent(day);
+                      const visibleEvents = getVisibleCalendarEvents(day);
+                      const dateButtonClassName = [
+                        "inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-semibold tracking-[-0.04em] transition hover:bg-slate-200/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900",
+                        day.isToday && holidayEvent
+                          ? "bg-rose-700 text-white hover:bg-rose-600"
+                          : day.isToday
+                            ? "bg-slate-950 text-white hover:bg-slate-800"
+                            : holidayEvent
+                              ? "text-rose-700"
+                              : day.isCurrentMonth
+                                ? "text-slate-950"
+                                : "text-slate-400",
+                      ].join(" ");
+                      const dayClassName = [
+                        "min-h-[10.2rem] border-b border-r border-stone-200 px-2.5 py-2.5",
+                        holidayEvent && "bg-rose-50/80",
+                        !holidayEvent &&
+                          !day.isCurrentMonth &&
+                          "bg-stone-100/70 text-slate-400",
+                        !holidayEvent &&
+                          day.isWeekend &&
+                          day.isCurrentMonth &&
+                          "bg-stone-50/65",
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
 
-                        <div className="mt-2.5 space-y-1.5">
-                          {day.events.slice(0, 3).map((event) => (
-                            <EventLine
-                              key={event.id}
-                              event={event}
-                              onEditManualSchedule={openEditDialog}
-                            />
-                          ))}
-                          {day.events.length > 3 ? (
-                            <div className="rounded-[0.85rem] border border-dashed border-stone-300 px-2.5 py-2 text-[0.72rem] font-medium text-slate-500">
-                              +{day.events.length - 3}건 더 있음
+                      return (
+                        <article key={day.dateInput} className={dayClassName}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex min-w-0 items-start gap-2">
+                              <button
+                                aria-label={`${day.dateInput} 일정 추가`}
+                                className={dateButtonClassName}
+                                onClick={() => openCreateDialog(day.dateInput)}
+                                type="button"
+                              >
+                                {day.dayNumber}
+                              </button>
+                              {holidayEvent ? (
+                                <p className="pt-1 text-xs font-semibold text-rose-700">
+                                  {holidayEvent.title}
+                                </p>
+                              ) : null}
                             </div>
-                          ) : null}
-                        </div>
-                      </article>
-                    ))}
+                            {visibleEvents.length > 0 ? (
+                              <span className="text-[0.68rem] font-medium text-slate-500">
+                                {visibleEvents.length}건
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-2.5 space-y-1.5">
+                            {visibleEvents.slice(0, 3).map((event) => (
+                              <EventLine
+                                key={event.id}
+                                event={event}
+                                onEditManualSchedule={openEditDialog}
+                              />
+                            ))}
+                            {visibleEvents.length > 3 ? (
+                              <div className="rounded-[0.85rem] border border-dashed border-stone-300 px-2.5 py-2 text-[0.72rem] font-medium text-slate-500">
+                                +{visibleEvents.length - 3}건 더 있음
+                              </div>
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
             </div>
           </Panel>
 
-          <Panel
-            title="월간 요약 패널"
-            description="다가오는 일정과 수동 일정 상태를 함께 확인합니다."
-            contentClassName="space-y-3"
-          >
-            <div className={cardSurfaceClassName}>
-              <div className="flex flex-wrap gap-2">
-                <TonePill label={pageData.month.monthLabel} tone="slate" />
-                <TonePill
-                  label={pageData.holidayInfo.label}
-                  tone={getHolidayInfoTone(pageData.holidayInfo.status)}
-                />
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                날짜 버튼으로 즉시 수동 일정을 등록할 수 있고, 등록된 수동 일정은
-                캘린더와 요약 패널 어디서든 다시 열어 수정하거나 삭제할 수 있습니다.
-                공휴일은 공개 API 기준으로 자동 반영되며, 장애 시 마지막 캐시를
-                유지합니다.
-              </p>
-            </div>
-
-            <section className="space-y-2">
+          <aside className="space-y-3">
+            <section className="rounded-[1.55rem] border border-stone-200 bg-white/92 p-4 shadow-[0_20px_42px_-38px_rgba(15,23,42,0.3)] backdrop-blur-sm">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-slate-900">다가오는 일정</h3>
+                <h2 className="text-[1rem] font-semibold tracking-[-0.035em] text-slate-950">
+                  다가오는 일정
+                </h2>
                 <TonePill
                   label={`${pageData.highlightEvents.length}건`}
                   tone="charcoal"
                 />
               </div>
-              {pageData.highlightEvents.length === 0 ? (
-                <EmptyState message="현재 조회 월에 표시할 일정이 없습니다." />
-              ) : (
-                <ul className="space-y-2">
-                  {pageData.highlightEvents.map((event) => (
-                    <li key={event.id}>
-                      <UpcomingEventCard
-                        event={event}
-                        onEditManualSchedule={openEditDialog}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                공휴일을 제외한 업무 일정만 표시합니다.
+              </p>
 
-            <details className={cardSurfaceClassName} open>
-              <summary className="cursor-pointer list-none text-sm font-semibold text-slate-950">
-                수동 일정 상태
-              </summary>
               <div className="mt-3 space-y-2">
-                {pageData.manualSchedules.length === 0 ? (
-                  <EmptyState message="현재 조회 월에 등록된 수동 일정이 없습니다." />
+                {pageData.highlightEvents.length === 0 ? (
+                  <EmptyState message="현재 조회 월에 표시할 업무 일정이 없습니다." />
                 ) : (
-                  pageData.manualSchedules.map((event) => (
-                    <ManualScheduleSummaryCard
-                      key={event.id}
-                      event={event}
-                      onEdit={openEditDialog}
-                    />
-                  ))
-                )}
-              </div>
-            </details>
-
-            <details className={cardSurfaceClassName}>
-              <summary className="cursor-pointer list-none text-sm font-semibold text-slate-950">
-                유지만료 추적
-              </summary>
-              <div className="mt-3 space-y-2">
-                {pageData.retentionAlerts.length === 0 ? (
-                  <EmptyState message="7일 이내 유지만료 예정 고객이 없습니다." />
-                ) : (
-                  pageData.retentionAlerts.map((item) => (
-                    <div
-                      key={`${item.customerName}:${item.eligibleDate}`}
-                      className="rounded-[1rem] border border-amber-200 bg-amber-50/85 p-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-amber-950">
-                            {item.customerName} · {item.carrierName}
-                          </p>
-                          <p className="mt-1 text-sm leading-6 text-amber-900">
-                            재개통 가능일 {item.eligibleDate}
-                          </p>
-                        </div>
-                        <TonePill
-                          label={`D-${item.daysUntil}`}
-                          tone="amber"
+                  <ul className="space-y-2">
+                    {pageData.highlightEvents.map((event) => (
+                      <li key={event.id}>
+                        <UpcomingEventCard
+                          event={event}
+                          onEditManualSchedule={openEditDialog}
                         />
-                      </div>
-                    </div>
-                  ))
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
-            </details>
-          </Panel>
+            </section>
+          </aside>
         </div>
       </div>
 

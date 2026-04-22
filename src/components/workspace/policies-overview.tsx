@@ -416,7 +416,8 @@ function StaffCommissionPolicyForm({
     <form action={upsertStaffCommissionPolicyAction} className={`${surfaceClassName} ${formGridClassName}`}>
       {initialPolicy ? <input name="id" type="hidden" value={initialPolicy.id} /> : null}
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-900 md:col-span-2">
-        직원명은 등록된 직원 기준으로 자동 지정됩니다. 동명이인은 직원코드(@아이디)로 구분합니다.
+        직원명은 기초정보의 직원 관리에 등록된 직원 기준으로 자동 지정됩니다. 동명이인은
+        직원코드(@아이디)로 구분합니다.
       </div>
       <FormSelect
         defaultValue={initialPolicy?.staffId ?? ""}
@@ -658,6 +659,7 @@ export function PoliciesOverview({
   const activeActivationRuleCount = carrierActivationRules.filter(
     (rule) => rule.isActive,
   ).length;
+  const canCreateStaffCommissionPolicy = staffs.length > 0;
 
   const activeSaleProfit =
     modalState?.entity === "saleProfit" && modalState.mode === "edit"
@@ -886,13 +888,24 @@ export function PoliciesOverview({
                 />
                 <button
                   className={`${primaryButtonClassName} h-10 px-4`}
+                  disabled={!canCreateStaffCommissionPolicy}
                   onClick={() =>
                     setModalState({ entity: "staffCommission", mode: "create" })
+                  }
+                  title={
+                    canCreateStaffCommissionPolicy
+                      ? undefined
+                      : "기초정보 > 직원 관리에서 직원을 먼저 등록해 주세요."
                   }
                   type="button"
                 >
                   신규 직원 수수료 정책 등록
                 </button>
+                {!canCreateStaffCommissionPolicy ? (
+                  <p className="flex items-center text-xs font-medium text-slate-500">
+                    기초정보의 직원 관리에서 직원을 먼저 등록해 주세요.
+                  </p>
+                ) : null}
               </div>
             }
             contentClassName="space-y-3"

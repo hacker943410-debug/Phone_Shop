@@ -25,6 +25,10 @@ import {
 import { useModalAccessibility } from "@/components/workspace/use-modal-accessibility";
 import { formatKstDate } from "@/lib/date-utils";
 import { formatWon } from "@/lib/formatters";
+import {
+  getSaleActivationTypeLabel,
+  getSaleCustomerEntryTypeLabel,
+} from "@/lib/sale-registration";
 import type { SalesUrlFilters } from "@/lib/sales-url-state";
 import { buildSalesHref } from "@/lib/sales-url-state";
 
@@ -526,6 +530,24 @@ export function SalesHistoryTable({
                   </section>
 
                   <section className="rounded-[1rem] border border-stone-200 bg-white/90 p-4">
+                    <h4 className="text-sm font-semibold text-slate-950">가입 정보</h4>
+                    <div className="mt-3">
+                      <InfoRow
+                        label="고객 구분"
+                        value={getSaleCustomerEntryTypeLabel(activeSale.customerEntryType)}
+                      />
+                      <InfoRow
+                        label="가입 유형"
+                        value={getSaleActivationTypeLabel(activeSale.activationType)}
+                      />
+                      <InfoRow
+                        label="거래 대리점"
+                        value={activeSale.salesAgencyName ?? "미지정"}
+                      />
+                    </div>
+                  </section>
+
+                  <section className="rounded-[1rem] border border-stone-200 bg-white/90 p-4">
                     <h4 className="text-sm font-semibold text-slate-950">판매 상품</h4>
                     <div className="mt-3 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -543,7 +565,32 @@ export function SalesHistoryTable({
                         label="요금제"
                         value={activeSale.ratePlanName ?? "미선택"}
                       />
-                      <InfoRow label="IMEI" value={activeSale.inventoryImei} />
+                      <InfoRow label="S/N" value={activeSale.inventorySerialNumber} />
+                      <InfoRow label="Model No." value={activeSale.inventoryModelNumber} />
+                      <InfoRow
+                        label="무선상품"
+                        value={
+                          activeSale.wirelessProducts.length > 0
+                            ? activeSale.wirelessProducts.join(", ")
+                            : "없음"
+                        }
+                      />
+                      <InfoRow
+                        label="유선상품"
+                        value={
+                          activeSale.wiredProducts.length > 0
+                            ? activeSale.wiredProducts.join(", ")
+                            : "없음"
+                        }
+                      />
+                      <InfoRow
+                        label="부가상품"
+                        value={
+                          activeSale.additionalProducts.length > 0
+                            ? activeSale.additionalProducts.join(", ")
+                            : "없음"
+                        }
+                      />
                       <InfoRow
                         label="부가서비스"
                         value={

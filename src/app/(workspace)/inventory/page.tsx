@@ -40,9 +40,9 @@ function isVisibilityValue(value: string): value is "all" | "visible" | "hidden"
 
 function isNoticeValue(
   value: string,
-): value is "duplicate-imei" | "invalid-inventory-form" | "inventory-not-found" {
+): value is "duplicate-serial" | "invalid-inventory-form" | "inventory-not-found" {
   return (
-    value === "duplicate-imei" ||
+    value === "duplicate-serial" ||
     value === "invalid-inventory-form" ||
     value === "inventory-not-found"
   );
@@ -127,6 +127,7 @@ export default async function InventoryPage({
   const [
     stores,
     carriers,
+    colors,
     deviceModels,
     staffMembers,
     filteredCount,
@@ -155,6 +156,14 @@ export default async function InventoryPage({
         id: true,
         name: true,
         code: true,
+        isActive: true,
+      },
+    }),
+    prisma.inventoryColorOption.findMany({
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
         isActive: true,
       },
     }),
@@ -268,6 +277,7 @@ export default async function InventoryPage({
         isDefault: store.isDefault,
       }))}
       carriers={carriers}
+      colors={colors}
       deviceModels={deviceModels}
       staffMembers={staffMembers.map((staff) => ({
         id: staff.id,
@@ -285,7 +295,8 @@ export default async function InventoryPage({
         deviceManufacturer: item.deviceModel.manufacturer,
         color: item.color,
         capacity: item.capacity,
-        imei: item.imei,
+        serialNumber: item.serialNumber,
+        modelNumber: item.modelNumber,
         costAmount: item.costAmount,
         status: item.status,
         receivedAt: item.receivedAt,

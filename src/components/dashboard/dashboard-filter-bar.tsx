@@ -13,27 +13,20 @@ import {
   secondaryButtonClassName,
   selectControlClassName,
 } from "@/components/workspace/ui-classnames";
-import type { DashboardPreset } from "@/lib/dashboard-reporting-types";
-
-interface DashboardFilters {
-  preset: DashboardPreset;
-  dateFrom: string;
-  dateTo: string;
-  storeId: string;
-}
-
-interface DashboardStoreOption {
-  id: string;
-  name: string;
-}
+import type {
+  DashboardFilters,
+  DashboardPreset,
+  DashboardStaffOption,
+  DashboardStoreOption,
+} from "@/lib/dashboard-reporting-types";
 
 const presetOptions: Array<{
   value: Exclude<DashboardPreset, "custom">;
   label: string;
 }> = [
   { value: "today", label: "오늘" },
-  { value: "week", label: "이번주" },
-  { value: "month", label: "이번달" },
+  { value: "week", label: "이번 주" },
+  { value: "month", label: "이번 달" },
 ];
 
 function buildDashboardQueryString(filters: DashboardFilters) {
@@ -41,51 +34,54 @@ function buildDashboardQueryString(filters: DashboardFilters) {
   searchParams.set("preset", filters.preset);
   searchParams.set("dateFrom", filters.dateFrom);
   searchParams.set("dateTo", filters.dateTo);
+
   if (filters.storeId) {
     searchParams.set("storeId", filters.storeId);
   }
+
+  if (filters.staffId) {
+    searchParams.set("staffId", filters.staffId);
+  }
+
   return searchParams.toString();
 }
 
 export function DashboardFilterBar({
   filters,
   stores,
+  staffs,
 }: {
   filters: DashboardFilters;
   stores: DashboardStoreOption[];
+  staffs: DashboardStaffOption[];
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function pushSearch(search: string) {
+  function pushFilters(nextFilters: DashboardFilters) {
     startTransition(() => {
-      router.push(search, { scroll: false });
+      router.push(`${pathname}?${buildDashboardQueryString(nextFilters)}`, {
+        scroll: false,
+      });
     });
   }
 
-  function pushPreset(preset: Exclude<DashboardPreset, "custom">, storeId: string) {
+  function applyPreset(preset: Exclude<DashboardPreset, "custom">) {
     const searchParams = new URLSearchParams();
     searchParams.set("preset", preset);
-    if (storeId) {
-      searchParams.set("storeId", storeId);
+
+    if (filters.storeId) {
+      searchParams.set("storeId", filters.storeId);
     }
-    pushSearch(`${pathname}?${searchParams.toString()}`);
-  }
 
-  function applyPreset(preset: Exclude<DashboardPreset, "custom">) {
-    pushPreset(preset, filters.storeId);
-  }
+    if (filters.staffId) {
+      searchParams.set("staffId", filters.staffId);
+    }
 
-  function applyCustomPeriod() {
-    pushSearch(
-      `${pathname}?${buildDashboardQueryString({
-        preset: "custom",
-        dateFrom: filters.dateFrom,
-        dateTo: filters.dateTo,
-        storeId: filters.storeId,
-      })}`,
-    );
+    startTransition(() => {
+      router.push(`${pathname}?${searchParams.toString()}`, { scroll: false });
+    });
   }
 
   function applyRange(nextDateFrom: string, nextDateTo: string) {
@@ -100,48 +96,37 @@ export function DashboardFilterBar({
       [normalizedFrom, normalizedTo] = [normalizedTo, normalizedFrom];
     }
 
-    pushSearch(
-      `${pathname}?${buildDashboardQueryString({
-        preset: "custom",
-        dateFrom: normalizedFrom,
-        dateTo: normalizedTo,
-        storeId: filters.storeId,
-      })}`,
-    );
-  }
-
-  function applyStore(storeId: string) {
-    if (filters.preset === "custom") {
-      pushSearch(
-        `${pathname}?${buildDashboardQueryString({
-          preset: "custom",
-          dateFrom: filters.dateFrom,
-          dateTo: filters.dateTo,
-          storeId,
-        })}`,
-      );
-      return;
-    }
-
-    pushPreset(filters.preset, storeId);
+    pushFilters({
+      ...filters,
+      preset: "custom",
+      dateFrom: normalizedFrom,
+      dateTo: normalizedTo,
+    });
   }
 
   const selectedStoreLabel =
-    stores.find((store) => store.id === filters.storeId)?.name ?? "전체";
+    stores.find((store) => store.id === filters.storeId)?.name ?? "전체 매장";
+  const selectedStaffLabel =
+    staffs.find((staff) => staff.id === filters.staffId)?.name ?? "전체 직원";
 
   return (
-    <section className="relative z-20 rounded-[1.15rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(247,245,241,0.96)_100%)] px-4 py-2 shadow-[0_18px_36px_-34px_rgba(15,23,42,0.22)] sm:px-4.5">
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
-        <div className="grid gap-2 sm:grid-cols-[minmax(9rem,12rem)_auto] sm:items-end">
+    <section className="dashboard-reveal rounded-[1.3rem] border border-stone-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(245,243,238,0.98)_100%)] px-4 py-3 shadow-[0_24px_48px_-38px_rgba(15,23,42,0.22)] sm:px-5">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] xl:items-end">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,11rem)_minmax(0,11rem)_auto]">
           <label className="space-y-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            <span>지점</span>
+            <span>매장</span>
             <SelectControl
-              aria-label="지점 선택"
+              aria-label="매장 선택"
               className={selectControlClassName}
               value={filters.storeId}
-              onValueChange={applyStore}
+              onValueChange={(storeId) =>
+                pushFilters({
+                  ...filters,
+                  storeId,
+                })
+              }
             >
-              <option value="">전체</option>
+              <option value="">전체 매장</option>
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
                   {store.name}
@@ -150,40 +135,56 @@ export function DashboardFilterBar({
             </SelectControl>
           </label>
 
-          <div className="flex flex-wrap gap-2">
-          {presetOptions.map((preset) => {
-            const active = filters.preset === preset.value;
-
-            return (
-              <button
-                key={preset.value}
-                type="button"
-                onClick={() => applyPreset(preset.value)}
-                className={joinClassNames(
-                  `${secondaryButtonClassName} h-8.5 cursor-pointer px-3.5 text-[0.78rem] font-semibold`,
-                  active &&
-                    "!border-slate-950 !bg-slate-950 !text-white hover:!border-slate-900 hover:!bg-slate-900 hover:!text-white",
-                )}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-            <button
-              type="button"
-              onClick={applyCustomPeriod}
-              className={joinClassNames(
-                `${secondaryButtonClassName} h-8.5 cursor-pointer px-3.5 text-[0.78rem] font-semibold`,
-                filters.preset === "custom" &&
-                  "!border-slate-950 !bg-slate-950 !text-white hover:!border-slate-900 hover:!bg-slate-900 hover:!text-white",
-              )}
+          <label className="space-y-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <span>직원</span>
+            <SelectControl
+              aria-label="직원 선택"
+              className={selectControlClassName}
+              value={filters.staffId}
+              onValueChange={(staffId) =>
+                pushFilters({
+                  ...filters,
+                  staffId,
+                })
+              }
             >
-              기간선택
-            </button>
+              <option value="">전체 직원</option>
+              {staffs.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name}
+                </option>
+              ))}
+            </SelectControl>
+          </label>
+
+          <div className="space-y-1">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              빠른 기간
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {presetOptions.map((preset) => {
+                const active = filters.preset === preset.value;
+
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => applyPreset(preset.value)}
+                    className={joinClassNames(
+                      `${secondaryButtonClassName} h-9 px-3.5 text-[0.8rem]`,
+                      active &&
+                        "!border-slate-950 !bg-none !bg-slate-950 !text-white hover:!border-slate-900 hover:!bg-none hover:!bg-slate-900 hover:!text-white",
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[20rem] xl:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
             <span>시작일</span>
             <DateControl
@@ -210,14 +211,23 @@ export function DashboardFilterBar({
         </div>
       </div>
 
-      <div className="mt-1.5 flex items-center justify-between gap-3 text-[0.72rem] font-medium text-slate-500">
-        <span>
-          {selectedStoreLabel} / {filters.dateFrom} ~ {filters.dateTo}
-        </span>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[0.78rem] text-slate-600">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-stone-100 px-3 py-1.5 font-medium">
+            {selectedStoreLabel}
+          </span>
+          <span className="rounded-full bg-stone-100 px-3 py-1.5 font-medium">
+            {selectedStaffLabel}
+          </span>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 font-medium text-blue-800">
+            {filters.dateFrom} ~ {filters.dateTo}
+          </span>
+        </div>
+
         <span
           className={joinClassNames(
-            "rounded-full px-2.5 py-1 transition",
-            isPending ? "bg-blue-50 text-blue-700" : "bg-stone-100 text-slate-500",
+            "rounded-full px-3 py-1.5 font-medium transition-colors duration-200",
+            isPending ? "bg-blue-50 text-blue-800" : "bg-stone-100 text-slate-500",
           )}
         >
           {isPending ? "갱신 중" : "자동 반영"}

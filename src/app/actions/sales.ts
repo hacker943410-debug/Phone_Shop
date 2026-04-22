@@ -7,6 +7,11 @@ import { requireCurrentUser } from "@/lib/auth/dal";
 import { parseKstDateInput } from "@/lib/date-utils";
 import { prisma } from "@/lib/prisma";
 import {
+  getAllowedWirelessProductCodes,
+  type SaleActivationType,
+  type SaleCustomerEntryType,
+} from "@/lib/sale-registration";
+import {
   calculatePolicyRevenueAmount,
   calculateSalesAmounts,
   findMatchingDiscountPolicy,
@@ -87,6 +92,37 @@ function readDiscountMethod(
   }
 }
 
+function readSaleCustomerEntryType(
+  formData: FormData,
+  key: string,
+): SaleCustomerEntryType | null {
+  const value = readText(formData, key);
+
+  switch (value) {
+    case "EXISTING":
+    case "NEW":
+      return value;
+    default:
+      return null;
+  }
+}
+
+function readSaleActivationType(
+  formData: FormData,
+  key: string,
+): SaleActivationType | null {
+  const value = readText(formData, key);
+
+  switch (value) {
+    case "DEVICE_CHANGE":
+    case "NEW_SUBSCRIPTION":
+    case "NUMBER_PORT":
+      return value;
+    default:
+      return null;
+  }
+}
+
 function readBoolean(formData: FormData, key: string) {
   return readText(formData, key) === "true";
 }
@@ -161,6 +197,9 @@ export async function createSaleAction(formData: FormData) {
   const currentUser = await requireCurrentUser();
 
   const customerId = readText(formData, "customerId");
+  const customerEntryType = readSaleCustomerEntryType(formData, "customerEntryType");
+  const activationType = readSaleActivationType(formData, "activationType");
+  const salesAgencyId = readText(formData, "salesAgencyId");
   const inventoryItemId = readText(formData, "inventoryItemId");
   const saleDate = readRequiredDate(formData, "saleDate");
   const ratePlanId = readOptionalText(formData, "ratePlanId");
@@ -177,9 +216,43 @@ export async function createSaleAction(formData: FormData) {
   const cardInstallmentMonths = readOptionalInt(formData, "cardInstallmentMonths");
   const notes = readOptionalText(formData, "notes");
   const selectedAddOnServiceIds = readAddOnServiceIds(formData);
+  const wirelessPostpaidSelected = readBoolean(formData, "wirelessPostpaidSelected");
+  const wirelessPrepaidSelected = readBoolean(formData, "wirelessPrepaidSelected");
+  const wirelessGeneralSelected = readBoolean(formData, "wirelessGeneralSelected");
+  const wirelessUsimOnlySelected = readBoolean(formData, "wirelessUsimOnlySelected");
+  const wirelessUsedPhoneSelected = readBoolean(formData, "wirelessUsedPhoneSelected");
+  const wirelessEggSelected = readBoolean(formData, "wirelessEggSelected");
+  const wiredInternetSelected = readBoolean(formData, "wiredInternetSelected");
+  const wiredTvSelected = readBoolean(formData, "wiredTvSelected");
+  const wiredLandlineSelected = readBoolean(formData, "wiredLandlineSelected");
+  const wiredInternetPhoneSelected = readBoolean(formData, "wiredInternetPhoneSelected");
+  const wiredBundleSelected = readBoolean(formData, "wiredBundleSelected");
+  const additionalDeviceOnlySelected = readBoolean(
+    formData,
+    "additionalDeviceOnlySelected",
+  );
   const subsidyAmount = subsidyAmountInput ?? 0;
+  const selectedWirelessProductCodes = [
+    ...(wirelessPostpaidSelected ? ["POSTPAID" as const] : []),
+    ...(wirelessPrepaidSelected ? ["PREPAID" as const] : []),
+    ...(wirelessGeneralSelected ? ["GENERAL" as const] : []),
+    ...(wirelessUsimOnlySelected ? ["USIM_ONLY" as const] : []),
+    ...(wirelessUsedPhoneSelected ? ["USED_PHONE" as const] : []),
+    ...(wirelessEggSelected ? ["EGG" as const] : []),
+  ];
+  const hasSelectedProduct =
+    selectedWirelessProductCodes.length > 0 ||
+    wiredInternetSelected ||
+    wiredTvSelected ||
+    wiredLandlineSelected ||
+    wiredInternetPhoneSelected ||
+    wiredBundleSelected ||
+    additionalDeviceOnlySelected;
 
   if (
+    !customerEntryType ||
+    !activationType ||
+    !salesAgencyId ||
     !customerId ||
     !inventoryItemId ||
     !saleDate ||
@@ -188,7 +261,18 @@ export async function createSaleAction(formData: FormData) {
     listPrice <= 0 ||
     cashAmount === null ||
     cardAmount === null ||
-    bankTransferAmount === null
+    bankTransferAmount === null ||
+    !hasSelectedProduct
+  ) {
+    redirectSalesNotice("invalid-sale-form");
+  }
+
+  const allowedWirelessProductCodes = getAllowedWirelessProductCodes(activationType);
+
+  if (
+    selectedWirelessProductCodes.some(
+      (productCode) => !allowedWirelessProductCodes.includes(productCode),
+    )
   ) {
     redirectSalesNotice("invalid-sale-form");
   }
@@ -198,6 +282,7 @@ export async function createSaleAction(formData: FormData) {
   const [
     defaultStoreId,
     customer,
+    salesAgency,
     inventoryItem,
     availableRatePlans,
     addOnServices,
@@ -210,6 +295,15 @@ export async function createSaleAction(formData: FormData) {
         where: {
           id: customerId,
           isHidden: false,
+        },
+        select: {
+          id: true,
+        },
+      }),
+      prisma.salesAgency.findFirst({
+        where: {
+          id: salesAgencyId,
+          isActive: true,
         },
         select: {
           id: true,
@@ -308,6 +402,10 @@ export async function createSaleAction(formData: FormData) {
 
   if (!customer) {
     redirectSalesNotice("sale-customer-not-found");
+  }
+
+  if (!salesAgency) {
+    redirectSalesNotice("invalid-sale-form");
   }
 
   if (!inventoryItem) {
@@ -473,13 +571,28 @@ export async function createSaleAction(formData: FormData) {
         data: {
           saleDate,
           status: SaleStatus.COMPLETED,
+          customerEntryType,
+          activationType,
           storeId: inventoryItem.storeId ?? defaultStoreId,
+          salesAgencyId: salesAgency.id,
           customerId: customer.id,
           staffId: currentUser.id,
           carrierId: inventoryItem.carrierId,
           ratePlanId,
           inventoryItemId: inventoryItem.id,
           deviceModelId: inventoryItem.deviceModelId,
+          wirelessPostpaidSelected,
+          wirelessPrepaidSelected,
+          wirelessGeneralSelected,
+          wirelessUsimOnlySelected,
+          wirelessUsedPhoneSelected,
+          wirelessEggSelected,
+          wiredInternetSelected,
+          wiredTvSelected,
+          wiredLandlineSelected,
+          wiredInternetPhoneSelected,
+          wiredBundleSelected,
+          additionalDeviceOnlySelected,
           listPrice,
           discountApplied,
           discountMethod: effectiveDiscountMethod,

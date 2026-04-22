@@ -16,6 +16,7 @@ const report: DashboardReportData = {
     dateFrom: "2026-04-06",
     dateTo: "2026-04-12",
     storeId: "",
+    staffId: "",
   },
   periodLabel: "2026-04-06 ~ 2026-04-12",
   generatedAt: "2026-04-12",
@@ -23,24 +24,34 @@ const report: DashboardReportData = {
     { id: "store-main", name: "본점" },
     { id: "store-gangnam", name: "강남점" },
   ],
+  availableStaffs: [
+    { id: "user-kim", name: "김지훈" },
+    { id: "user-park", name: "박선영" },
+  ],
   metrics: [
     {
-      label: "오늘 판매 건수",
-      value: "0건",
-      helper: "완료 판매 0건 / 취소 0건",
+      label: "선택 기간 매출",
+      value: "₩4,618,000",
+      helper: "판매 4건 / 오늘 취소 0건",
       accent: "amber",
     },
     {
-      label: "오늘 수납 금액",
-      value: "0원",
-      helper: "즉시 수납 0원 / 추가 수납 0원",
+      label: "선택 기간 수금",
+      value: "₩3,638,000",
+      helper: "당일 수금 ₩3,518,000 / 추가 수납 ₩120,000",
       accent: "teal",
     },
     {
-      label: "현재 미수금 잔액",
+      label: "현재 미수금",
       value: "₩980,000",
-      helper: "미수금 3건 / 부분 수납 1건",
+      helper: "미수 3건 / 부분수납 1건",
       accent: "slate",
+    },
+    {
+      label: "선택 기간 순이익",
+      value: "₩1,170,000",
+      helper: "리베이트 ₩980,000 / 정책 수익 ₩190,000",
+      accent: "amber",
     },
   ],
   summary: {
@@ -66,7 +77,7 @@ const report: DashboardReportData = {
   attentionItems: [],
   receivableSnapshots: [
     {
-      customerName: "김지훈",
+      customerName: "김지원",
       carrierName: "KT",
       deviceModelName: "iPhone 16",
       balanceAmount: 600_000,
@@ -85,13 +96,44 @@ const report: DashboardReportData = {
   ],
   staffSummaries: [
     {
-      staffId: "user-kim-jh",
+      staffId: "user-kim",
       staffName: "김지훈",
       salesCount: 2,
+      paymentCount: 1,
       salesAmount: 1_940_000,
       collectedAmount: 1_560_000,
       additionalPaymentAmount: 0,
       profitAmount: 250_000,
+    },
+  ],
+  receivableHealthBuckets: [
+    {
+      id: "0-7",
+      label: "0~7일",
+      count: 1,
+      balanceAmount: 180_000,
+      tone: "teal",
+    },
+    {
+      id: "8-30",
+      label: "8~30일",
+      count: 1,
+      balanceAmount: 300_000,
+      tone: "slate",
+    },
+    {
+      id: "31-60",
+      label: "31~60일",
+      count: 1,
+      balanceAmount: 500_000,
+      tone: "amber",
+    },
+    {
+      id: "61+",
+      label: "61일 이상",
+      count: 0,
+      balanceAmount: 0,
+      tone: "rose",
     },
   ],
   dailySummaries: [
@@ -121,12 +163,35 @@ const report: DashboardReportData = {
   ],
   activationEligibleCustomers: [
     {
-      customerId: "customer-yoon-seojin",
+      customerId: "customer-yoon",
       customerName: "윤서진",
       carrierName: "KT",
       lastSaleDate: "2025-12-02",
       eligibleDate: "2026-04-08",
+      daysUntil: 2,
       ruleLabel: "127일 기준",
+    },
+  ],
+  retentionTopCustomers: [
+    {
+      customerId: "customer-yoon",
+      customerName: "윤서진",
+      carrierName: "KT",
+      lastSaleDate: "2025-12-02",
+      eligibleDate: "2026-04-08",
+      daysUntil: 2,
+      ruleLabel: "127일 기준",
+    },
+  ],
+  upcomingScheduleRows: [
+    {
+      id: "manual:schedule-1",
+      dateInput: "2026-04-09",
+      kindLabel: "수동 일정",
+      title: "유지 안내 콜백",
+      customerName: "윤서진",
+      subtitle: "KT / iPhone 16 / 오후 연락",
+      statusLabel: "예정",
     },
   ],
   carrierTrendSeries: [
@@ -139,7 +204,7 @@ const report: DashboardReportData = {
       ],
     },
     {
-      carrierName: "SK",
+      carrierName: "SKT",
       totalCount: 1,
       points: [
         { date: "2026-04-10", count: 0 },
@@ -150,40 +215,31 @@ const report: DashboardReportData = {
 };
 
 describe("DashboardOverview", () => {
-  it("renders dashboard sections, actions, and detail modal triggers", () => {
+  it("renders the compact dashboard, charts, tables, and export links", () => {
     render(<DashboardOverview report={report} />);
+    expect(screen.getByText("직원별 업무 처리 건수")).toBeInTheDocument();
 
-    expect(
-      screen.getByRole("heading", {
-        name: "대시보드",
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("오늘 판매 건수")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "인쇄용 보고서" }),
-    ).toHaveAttribute(
+    expect(screen.getByText("선택 기간 매출")).toBeInTheDocument();
+    expect(screen.getByText("매장별 매출 실적")).toBeInTheDocument();
+    expect(screen.getByText("통신사별 판매 건수")).toBeInTheDocument();
+    expect(screen.getByText("기간별 흐름")).toBeInTheDocument();
+    expect(screen.getByText("미수금 건전성")).toBeInTheDocument();
+    expect(screen.getByText("유지만료예정고객 Top 10")).toBeInTheDocument();
+    expect(screen.getByText("예정된 일정 Top 10")).toBeInTheDocument();
+    expect(screen.getByText("조회 기간 2026-04-06 ~ 2026-04-12")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "상세 리포트" })).toHaveAttribute(
       "href",
       "/reports/summary?preset=week&dateFrom=2026-04-06&dateTo=2026-04-12",
     );
-    expect(
-      screen.getByRole("link", { name: "CSV 다운로드" }),
-    ).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "CSV" })).toHaveAttribute(
       "href",
       "/api/reports/summary?preset=week&dateFrom=2026-04-06&dateTo=2026-04-12",
     );
-    expect(screen.getByText("운영 체크")).toBeInTheDocument();
-    expect(screen.getByText("매장별 매출 실적")).toBeInTheDocument();
-    expect(screen.getByText("담당자 요약")).toBeInTheDocument();
-    expect(screen.getByText("최근 판매")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "담당자" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "판매" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "개통" })).toBeInTheDocument();
-    expect(screen.getByText("개통 가능 고객")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "상세보기" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "전체 보기" }).length).toBeGreaterThan(0);
-    expect(
-      screen.queryByRole("button", { name: "기간 적용" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("127일 기준")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "PDF" })).toHaveAttribute(
+      "href",
+      "/api/reports/summary/pdf?preset=week&dateFrom=2026-04-06&dateTo=2026-04-12",
+    );
+    expect(screen.getByText("D-2")).toBeInTheDocument();
+    expect(screen.getByText("유지 안내 콜백")).toBeInTheDocument();
   });
 });

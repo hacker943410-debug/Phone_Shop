@@ -242,3 +242,17 @@ export function countScheduleEventsInRange(input: {
     return true;
   }).length;
 }
+
+export function listUpcomingBusinessScheduleEvents(input: {
+  events: ScheduleEventRecord[];
+  dateFrom: string;
+  limit?: number;
+}) {
+  const limit = input.limit ?? 8;
+
+  return sortScheduleEvents(input.events)
+    .filter(
+      (event) => event.dateInput >= input.dateFrom && event.kind !== "HOLIDAY",
+    )
+    .slice(0, limit);
+}

@@ -4,6 +4,11 @@ export type RevenueCalculationMethodValue =
   | "FIXED_AMOUNT"
   | "PERCENTAGE";
 export type SaleStatusValue = "COMPLETED" | "CANCELED";
+export type SaleCustomerEntryTypeValue = "EXISTING" | "NEW";
+export type SaleActivationTypeValue =
+  | "DEVICE_CHANGE"
+  | "NEW_SUBSCRIPTION"
+  | "NUMBER_PORT";
 export type ReceivableStatusValue = "UNPAID" | "PARTIALLY_PAID" | "PAID";
 export type SalesStatusFilterValue = "all" | SaleStatusValue;
 
@@ -68,6 +73,11 @@ export interface SalesStoreRecord {
   name: string;
 }
 
+export interface SalesAgencyRecord {
+  id: string;
+  name: string;
+}
+
 export interface SalesPagination {
   page: number;
   pageSize: number;
@@ -125,7 +135,8 @@ export interface SalesAvailableInventoryRecord {
   storeName: string | null;
   color: string;
   capacity: string;
-  imei: string;
+  serialNumber: string;
+  modelNumber: string;
   costAmount: number;
   receivedAt: string;
 }
@@ -134,14 +145,18 @@ export interface SalesRecord {
   id: string;
   saleDate: string;
   status: SaleStatusValue;
+  customerEntryType: SaleCustomerEntryTypeValue;
+  activationType: SaleActivationTypeValue;
   canceledAt: string | null;
   cancellationReason: string | null;
   storeName: string | null;
+  salesAgencyName: string | null;
   customerName: string;
   customerPhone: string;
   carrierName: string;
   deviceModelName: string;
-  inventoryImei: string;
+  inventorySerialNumber: string;
+  inventoryModelNumber: string;
   ratePlanName: string | null;
   staffName: string;
   subsidyAmount: number;
@@ -156,6 +171,9 @@ export interface SalesRecord {
   receivableBalance: number;
   receivableStatus: ReceivableStatusValue | null;
   selectedServices: string[];
+  wirelessProducts: string[];
+  wiredProducts: string[];
+  additionalProducts: string[];
   appliedDiscountPolicyName: string | null;
   appliedSaleProfitPolicyName: string | null;
   appliedStaffCommissionPolicyName: string | null;

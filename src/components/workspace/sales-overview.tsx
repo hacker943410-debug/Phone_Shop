@@ -15,6 +15,7 @@ import type {
   SalesNotice,
   SalesPagination,
   SalesRecord,
+  SalesAgencyRecord,
   SalesSaleProfitPolicyRecord,
   SalesStaffCommissionPolicyRecord,
   SalesStoreRecord,
@@ -153,6 +154,7 @@ export interface SalesOverviewProps {
   metrics: SalesMetrics;
   customers: SalesCustomerRecord[];
   stores: SalesStoreRecord[];
+  salesAgencies: SalesAgencyRecord[];
   carriers: SalesCarrierRecord[];
   saleProfitPolicies: SalesSaleProfitPolicyRecord[];
   staffCommissionPolicies: SalesStaffCommissionPolicyRecord[];
@@ -171,6 +173,7 @@ export function SalesOverview({
   metrics,
   customers,
   stores,
+  salesAgencies,
   carriers,
   saleProfitPolicies,
   staffCommissionPolicies,
@@ -214,6 +217,7 @@ export function SalesOverview({
               customers={customers}
               defaultSaleDate={defaultSaleDate}
               discountPolicies={discountPolicies}
+              salesAgencies={salesAgencies}
               saleProfitPolicies={saleProfitPolicies}
               staffCommissionPolicies={staffCommissionPolicies}
             />
@@ -248,7 +252,12 @@ export function SalesOverview({
         />
       </section>
 
-      {notice ? <NoticeBanner message={noticeMessageMap[notice]} /> : null}
+      {notice ? (
+        <NoticeBanner
+          message={noticeMessageMap[notice]}
+          tone={notice === "sale-created" ? "success" : "error"}
+        />
+      ) : null}
 
       <Panel
         title="필터"

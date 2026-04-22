@@ -73,9 +73,27 @@ export interface CustomerSaleRecord {
   carrierName: string;
   deviceModelName: string;
   ratePlanName: string | null;
+  ratePlanMonthlyFee: number | null;
   finalSalePrice: number;
   receivableAmount: number;
   staffName: string;
+  deviceInstallmentPrincipal: number;
+  installmentMonths: number | null;
+  monthlyInstallmentAmount: number | null;
+  remainingInstallmentAmount: number | null;
+  remainingInstallmentMonths: number | null;
+}
+
+export interface CustomerActiveContractRecord {
+  saleDate: Date;
+  deviceModelName: string;
+  ratePlanName: string | null;
+  ratePlanMonthlyFee: number | null;
+  deviceInstallmentPrincipal: number;
+  installmentMonths: number | null;
+  monthlyInstallmentAmount: number | null;
+  remainingInstallmentAmount: number | null;
+  remainingInstallmentMonths: number | null;
 }
 
 export interface CustomerReceivableRecord {
@@ -99,6 +117,7 @@ export interface SelectedCustomerRecord {
   address: string | null;
   memo: string | null;
   createdAt: Date;
+  activeContract: CustomerActiveContractRecord | null;
   sales: CustomerSaleRecord[];
   receivables: CustomerReceivableRecord[];
 }
@@ -286,6 +305,7 @@ function CustomerDetailModal({
     (total, receivable) => total + receivable.balanceAmount,
     0,
   );
+  const activeContract = customer.activeContract;
 
   return (
     <QueryModalShell
@@ -295,7 +315,25 @@ function CustomerDetailModal({
       title={`${customer.name} 고객 상세`}
     >
       <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+          <SummaryCard
+            label="월 요금제"
+            value={
+              activeContract?.ratePlanMonthlyFee !== null &&
+              activeContract?.ratePlanMonthlyFee !== undefined
+                ? formatWon(activeContract.ratePlanMonthlyFee)
+                : "미정"
+            }
+          />
+          <SummaryCard
+            label="잔여 할부금"
+            value={
+              activeContract?.remainingInstallmentAmount !== null &&
+              activeContract?.remainingInstallmentAmount !== undefined
+                ? formatWon(activeContract.remainingInstallmentAmount)
+                : "계산 불가"
+            }
+          />
           <SummaryCard label="통신사" value={customer.currentCarrierName ?? "미정"} />
           <SummaryCard label="최근 판매" value={`${customer.sales.length}건`} />
           <SummaryCard
@@ -388,7 +426,19 @@ function CustomerSalesModal({
                     {formatKstDate(sale.saleDate)}
                   </span>
                 </div>
-                <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-6">
+                  <p>
+                    월 요금제{" "}
+                    {sale.ratePlanMonthlyFee !== null
+                      ? formatWon(sale.ratePlanMonthlyFee)
+                      : "미정"}
+                  </p>
+                  <p>
+                    잔여 할부금{" "}
+                    {sale.remainingInstallmentAmount !== null
+                      ? formatWon(sale.remainingInstallmentAmount)
+                      : "계산 불가"}
+                  </p>
                   <p>요금제 {sale.ratePlanName ?? "미정"}</p>
                   <p>판매가 {formatWon(sale.finalSalePrice)}</p>
                   <p>미수금 {formatWon(sale.receivableAmount)}</p>

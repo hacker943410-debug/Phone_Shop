@@ -5,14 +5,15 @@ import {
 } from "@/lib/dashboard-reporting";
 
 describe("dashboard reporting", () => {
-  it("defaults to the current week when filters are absent", () => {
+  it("defaults to the current month when filters are absent", () => {
     expect(
       resolveDashboardFilters({}, new Date("2026-04-12T09:00:00+09:00")),
     ).toEqual({
-      preset: "week",
-      dateFrom: "2026-04-06",
+      preset: "month",
+      dateFrom: "2026-04-01",
       dateTo: "2026-04-12",
       storeId: "",
+      staffId: "",
     });
   });
 
@@ -23,6 +24,7 @@ describe("dashboard reporting", () => {
           preset: "month",
           dateFrom: "2026-04-12",
           dateTo: "2026-04-01",
+          staffId: "user-kim",
         },
         new Date("2026-04-12T09:00:00+09:00"),
       ),
@@ -31,6 +33,7 @@ describe("dashboard reporting", () => {
       dateFrom: "2026-04-01",
       dateTo: "2026-04-12",
       storeId: "",
+      staffId: "user-kim",
     });
   });
 
@@ -40,11 +43,13 @@ describe("dashboard reporting", () => {
         preset: "custom",
         dateFrom: "2026-04-01",
         dateTo: "2026-04-12",
-        storeId: "",
+        storeId: "store-main",
+        staffId: "user-kim",
       },
       periodLabel: "2026-04-01 ~ 2026-04-12",
       generatedAt: "2026-04-12",
       availableStores: [],
+      availableStaffs: [],
       metrics: [],
       summary: {
         todaySalesCount: 0,
@@ -80,6 +85,7 @@ describe("dashboard reporting", () => {
         },
       ],
       staffSummaries: [],
+      receivableHealthBuckets: [],
       dailySummaries: [
         {
           date: "2026-04-11",
@@ -95,10 +101,10 @@ describe("dashboard reporting", () => {
         {
           id: "sale-1",
           saleDate: "2026-04-11",
-          customerName: "김수현",
+          customerName: "김서현",
           carrierName: "KT",
           deviceModelName: "iPhone 16",
-          staffName: "박선우",
+          staffName: "박선영",
           collectedAmount: 988_000,
           receivableAmount: 300_000,
           receivableStatus: "PARTIALLY_PAID",
@@ -107,21 +113,22 @@ describe("dashboard reporting", () => {
       ],
       activationEligibleCustomers: [
         {
-          customerId: "customer-yoon-seojin",
+          customerId: "customer-yoon",
           customerName: "윤서진",
           carrierName: "KT",
           lastSaleDate: "2025-12-02",
           eligibleDate: "2026-04-08",
+          daysUntil: 2,
           ruleLabel: "127일 기준",
         },
       ],
+      retentionTopCustomers: [],
+      upcomingScheduleRows: [],
       carrierTrendSeries: [
         {
           carrierName: "KT",
           totalCount: 2,
-          points: [
-            { date: "2026-04-11", count: 2 },
-          ],
+          points: [{ date: "2026-04-11", count: 2 }],
         },
       ],
     };
@@ -130,8 +137,10 @@ describe("dashboard reporting", () => {
 
     expect(csv).toContain("PhoneShop 기간 보고서");
     expect(csv).toContain("조회 기간,2026-04-01 ~ 2026-04-12");
-    expect(csv).toContain("일자,판매 건수,판매 금액,수납 금액,리베이트,통신사 할인,총이익");
-    expect(csv).toContain("판매일,고객,통신사,기종,담당자,수납 금액,미수 금액,총이익");
-    expect(csv).toContain("2026-04-11,김수현,KT,iPhone 16,박선우,988000,300000,380000");
+    expect(csv).toContain("매장 필터,store-main");
+    expect(csv).toContain("직원 필터,user-kim");
+    expect(csv).toContain("일자,판매 건수,판매 금액,수금 금액,리베이트,정책 수익,순이익");
+    expect(csv).toContain("판매일,고객,통신사,기종,담당자,수금 금액,미수 금액,순이익");
+    expect(csv).toContain("2026-04-11,김서현,KT,iPhone 16,박선영,988000,300000,380000");
   });
 });

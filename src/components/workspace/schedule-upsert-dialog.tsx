@@ -14,11 +14,12 @@ import {
   dangerButtonClassName,
   secondaryButtonClassName,
 } from "@/components/workspace/ui-classnames";
+import { WorkspaceMessageModal } from "@/components/workspace/workspace-alert-dialog";
+import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 import {
   buildScheduleUpsertActionState,
 } from "@/lib/schedule-upsert-action-state";
 import type { ManualScheduleStatusValue } from "@/lib/schedule";
-import { WorkspaceModalShell } from "@/components/workspace/workspace-modal-shell";
 
 export interface ScheduleDialogCustomerOption {
   id: string;
@@ -105,7 +106,7 @@ export function ScheduleUpsertDialog({
     >
       <div className="mx-auto max-w-3xl space-y-4">
         <div className="rounded-[1.15rem] border border-stone-200 bg-stone-50/90 px-4 py-3 text-sm leading-6 text-slate-600">
-          날짜 기준으로 후속 연락, 매장 방문, 내부 체크 일정을 등록합니다.
+          날짜 기준으로 약속 연락, 매장 방문, 회수 체크 일정을 등록합니다.
         </div>
 
         {initialSchedule?.saleLabel ? (
@@ -135,7 +136,7 @@ export function ScheduleUpsertDialog({
             defaultValue={state.fields.title}
             label="제목"
             name="title"
-            placeholder="예: 유지기간 만료 후 후속 연락"
+            placeholder="예: 유지기간 만료 전 약속 연락"
             required
             wrapperClassName="md:col-span-2"
           />
@@ -172,16 +173,10 @@ export function ScheduleUpsertDialog({
             defaultValue={state.fields.memo}
             label="메모"
             name="memo"
-            placeholder="상담 메모, 준비할 서류, 내부 전달 사항"
+            placeholder="상담 메모, 준비할 서류, 미리 전달 사항"
             rows={4}
             wrapperClassName="md:col-span-2"
           />
-
-          {state.message && state.status === "error" ? (
-            <div className="md:col-span-2 rounded-[1rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-800">
-              {state.message}
-            </div>
-          ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-2">
             <div>
@@ -208,7 +203,7 @@ export function ScheduleUpsertDialog({
               </button>
               <SubmitButton
                 disabled={isPending}
-                label={isPending ? "저장 중..." : "일정 저장"}
+                label={isPending ? "저장 중.." : "일정 저장"}
                 name="intent"
                 value="save"
               />
@@ -216,6 +211,14 @@ export function ScheduleUpsertDialog({
           </div>
         </form>
       </div>
+
+      <WorkspaceMessageModal
+        message={state.status === "error" ? state.message : null}
+        signal={state}
+        subtitle="Schedule Form"
+        title="일정 정보를 확인해 주세요"
+        tone="error"
+      />
     </WorkspaceModalShell>
   );
 }

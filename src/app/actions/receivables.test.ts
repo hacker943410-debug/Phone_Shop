@@ -6,12 +6,24 @@ const redirect = vi.fn((url: string) => {
   throw new Error(`REDIRECT:${url}`);
 });
 
+const customerFindFirst = vi.fn();
 const paymentFindUnique = vi.fn();
 const paymentUpdate = vi.fn();
+const receivableCreate = vi.fn();
 const receivableFindUnique = vi.fn();
 const receivableUpdate = vi.fn();
+const storeFindFirst = vi.fn();
 
 const prisma = {
+  customer: {
+    findFirst: customerFindFirst,
+  },
+  receivable: {
+    create: receivableCreate,
+  },
+  store: {
+    findFirst: storeFindFirst,
+  },
   $transaction: vi.fn(
     async (
       callback: (tx: {
@@ -58,6 +70,54 @@ describe("receivables actions", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+  });
+
+  it("creates a manual receivable for an existing customer", async () => {
+    requireCurrentUser.mockResolvedValueOnce({
+      id: "user-admin",
+      username: "admin",
+      displayName: "관리자",
+      role: "ADMIN",
+      isActive: true,
+    });
+    customerFindFirst.mockResolvedValueOnce({
+      id: "customer-kim",
+    });
+    receivableCreate.mockResolvedValueOnce({
+      id: "manual-receivable-kim",
+    });
+
+    const { createManualReceivableAction } = await import("@/app/actions/receivables");
+    const formData = new FormData();
+    formData.set("customerId", "customer-kim");
+    formData.set("amount", "350,000");
+
+    await createManualReceivableAction(formData);
+
+    expect(customerFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "customer-kim",
+        isHidden: false,
+      },
+      select: {
+        id: true,
+      },
+    });
+    expect(receivableCreate).toHaveBeenCalledWith({
+      data: {
+        saleId: null,
+        customerId: "customer-kim",
+        status: "UNPAID",
+        originalAmount: 350000,
+        balanceAmount: 350000,
+        memo: null,
+      },
+    });
+    expect(revalidatePath).toHaveBeenCalledTimes(4);
+    expect(revalidatePath).toHaveBeenCalledWith("/receivables");
+    expect(revalidatePath).toHaveBeenCalledWith("/customers");
+    expect(revalidatePath).toHaveBeenCalledWith("/sales");
+    expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
   it("requires a cancellation reason before canceling a payment", async () => {

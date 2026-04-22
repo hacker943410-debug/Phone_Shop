@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCurrentUser } from "@/lib/auth/dal";
+import { extractCurrencyDigits } from "@/lib/currency-input";
 import { parseKstDateInput } from "@/lib/date-utils";
-import { normalizeImei } from "@/lib/phone-utils";
+import { formatModelNumberInput } from "@/lib/model-number-input";
 import { prisma } from "@/lib/prisma";
 import {
   InventoryStatus,
@@ -22,7 +23,7 @@ function readOptionalText(formData: FormData, key: string) {
 }
 
 function readInt(formData: FormData, key: string) {
-  const value = readText(formData, key);
+  const value = extractCurrencyDigits(readText(formData, key));
 
   if (!value) {
     return null;
@@ -58,6 +59,14 @@ function readInventoryStatus(
 function readRequiredDate(formData: FormData, key: string) {
   const value = readText(formData, key);
   return value ? parseKstDateInput(value, "start") : null;
+}
+
+function normalizeSerialNumber(value: string) {
+  return value.replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeModelNumber(value: string) {
+  return formatModelNumberInput(value);
 }
 
 function resolveDispatchedAt(
@@ -97,10 +106,10 @@ function revalidateInventoryViews() {
   revalidatePath("/sales");
 }
 
-async function ensureUniqueImei(id: string | null, imei: string) {
+async function ensureUniqueSerialNumber(id: string | null, serialNumber: string) {
   const duplicate = await prisma.inventoryItem.findFirst({
     where: {
-      imei,
+      serialNumber,
       ...(id ? { id: { not: id } } : {}),
     },
     select: {
@@ -109,7 +118,7 @@ async function ensureUniqueImei(id: string | null, imei: string) {
   });
 
   if (duplicate) {
-    redirect("/inventory?notice=duplicate-imei");
+    redirect("/inventory?notice=duplicate-serial");
   }
 }
 
@@ -122,7 +131,8 @@ export async function upsertInventoryItemAction(formData: FormData) {
   const deviceModelId = readText(formData, "deviceModelId");
   const color = readText(formData, "color");
   const capacity = readText(formData, "capacity");
-  const imei = normalizeImei(readText(formData, "imei"));
+  const serialNumber = normalizeSerialNumber(readText(formData, "serialNumber"));
+  const modelNumber = normalizeModelNumber(readText(formData, "modelNumber"));
   const costAmount = readInt(formData, "costAmount");
   const status = readInventoryStatus(formData, "status");
   const receivedAt = readRequiredDate(formData, "receivedAt");
@@ -136,7 +146,8 @@ export async function upsertInventoryItemAction(formData: FormData) {
     !deviceModelId ||
     !color ||
     !capacity ||
-    !imei ||
+    !serialNumber ||
+    !modelNumber ||
     costAmount === null ||
     !status ||
     !receivedAt
@@ -144,7 +155,7 @@ export async function upsertInventoryItemAction(formData: FormData) {
     redirect("/inventory?notice=invalid-inventory-form");
   }
 
-  await ensureUniqueImei(id, imei);
+  await ensureUniqueSerialNumber(id, serialNumber);
 
   if (id) {
     const existing = await prisma.inventoryItem.findUnique({
@@ -170,7 +181,8 @@ export async function upsertInventoryItemAction(formData: FormData) {
         deviceModelId,
         color,
         capacity,
-        imei,
+        serialNumber,
+        modelNumber,
         costAmount,
         status,
         receivedAt,
@@ -187,7 +199,8 @@ export async function upsertInventoryItemAction(formData: FormData) {
         deviceModelId,
         color,
         capacity,
-        imei,
+        serialNumber,
+        modelNumber,
         costAmount,
         status,
         receivedAt,

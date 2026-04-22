@@ -39,9 +39,7 @@ export default async function PoliciesPage() {
     }),
     prisma.user.findMany({
       where: {
-        role: {
-          in: ["ADMIN", "STAFF"],
-        },
+        role: "STAFF",
       },
       orderBy: [{ isActive: "desc" }, { displayName: "asc" }, { username: "asc" }],
       select: {

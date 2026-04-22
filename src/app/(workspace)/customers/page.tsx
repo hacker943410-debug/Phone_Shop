@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { CustomersOverview } from "@/components/workspace/customers-overview";
 import { normalizeRedirectPath } from "@/lib/auth/access";
+import { buildCustomerActiveContractSummary } from "@/lib/customer-contract-summary";
 import {
   isCustomerModalView,
   type CustomerModalView,
@@ -236,7 +237,15 @@ export default async function CustomersPage({
             orderBy: {
               saleDate: "desc",
             },
-            include: {
+            select: {
+              id: true,
+              saleDate: true,
+              status: true,
+              listPrice: true,
+              subsidyAmount: true,
+              finalSalePrice: true,
+              receivableAmount: true,
+              cardInstallmentMonths: true,
               carrier: {
                 select: {
                   name: true,
@@ -250,6 +259,7 @@ export default async function CustomersPage({
               ratePlan: {
                 select: {
                   name: true,
+                  monthlyFee: true,
                 },
               },
               staff: {
@@ -288,6 +298,57 @@ export default async function CustomersPage({
   const repeatCustomerCount = repeatCustomerGroups.filter(
     (customerGroup) => customerGroup._count._all > 1,
   ).length;
+  const selectedCustomerSales = selectedCustomer
+    ? selectedCustomer.sales.map((sale) => {
+        const activeContractSummary = buildCustomerActiveContractSummary([
+          {
+            saleDate: sale.saleDate,
+            status: sale.status,
+            deviceModelName: sale.deviceModel.name,
+            ratePlanName: sale.ratePlan?.name ?? null,
+            ratePlanMonthlyFee: sale.ratePlan?.monthlyFee ?? null,
+            listPrice: sale.listPrice,
+            subsidyAmount: sale.subsidyAmount,
+            installmentMonths: sale.cardInstallmentMonths,
+          },
+        ]);
+
+        return {
+          id: sale.id,
+          saleDate: sale.saleDate,
+          carrierName: sale.carrier.name,
+          deviceModelName: sale.deviceModel.name,
+          ratePlanName: sale.ratePlan?.name ?? null,
+          ratePlanMonthlyFee: sale.ratePlan?.monthlyFee ?? null,
+          finalSalePrice: sale.finalSalePrice,
+          receivableAmount: sale.receivableAmount,
+          staffName: sale.staff.displayName,
+          deviceInstallmentPrincipal:
+            activeContractSummary?.deviceInstallmentPrincipal ?? 0,
+          installmentMonths: sale.cardInstallmentMonths,
+          monthlyInstallmentAmount:
+            activeContractSummary?.monthlyInstallmentAmount ?? null,
+          remainingInstallmentAmount:
+            activeContractSummary?.remainingInstallmentAmount ?? null,
+          remainingInstallmentMonths:
+            activeContractSummary?.remainingInstallmentMonths ?? null,
+        };
+      })
+    : [];
+  const selectedCustomerActiveContract = selectedCustomer
+    ? buildCustomerActiveContractSummary(
+        selectedCustomer.sales.map((sale) => ({
+          saleDate: sale.saleDate,
+          status: sale.status,
+          deviceModelName: sale.deviceModel.name,
+          ratePlanName: sale.ratePlan?.name ?? null,
+          ratePlanMonthlyFee: sale.ratePlan?.monthlyFee ?? null,
+          listPrice: sale.listPrice,
+          subsidyAmount: sale.subsidyAmount,
+          installmentMonths: sale.cardInstallmentMonths,
+        })),
+      )
+    : null;
 
   return (
     <CustomersOverview
@@ -317,16 +378,8 @@ export default async function CustomersPage({
               address: selectedCustomer.address,
               memo: selectedCustomer.memo,
               createdAt: selectedCustomer.createdAt,
-              sales: selectedCustomer.sales.map((sale) => ({
-                id: sale.id,
-                saleDate: sale.saleDate,
-                carrierName: sale.carrier.name,
-                deviceModelName: sale.deviceModel.name,
-                ratePlanName: sale.ratePlan?.name ?? null,
-                finalSalePrice: sale.finalSalePrice,
-                receivableAmount: sale.receivableAmount,
-                staffName: sale.staff.displayName,
-              })),
+              activeContract: selectedCustomerActiveContract,
+              sales: selectedCustomerSales,
               receivables: selectedCustomer.receivables.map((receivable) => ({
                 id: receivable.id,
                 createdAt: receivable.createdAt,
@@ -334,8 +387,10 @@ export default async function CustomersPage({
                 balanceAmount: receivable.balanceAmount,
                 status: receivable.status,
                 memo: receivable.memo,
-                saleDate: receivable.sale.saleDate,
-                saleSummary: `${receivable.sale.carrier.name} ${receivable.sale.deviceModel.name}`,
+                saleDate: receivable.sale?.saleDate ?? receivable.createdAt,
+                saleSummary: receivable.sale
+                  ? `${receivable.sale.carrier.name} ${receivable.sale.deviceModel.name}`
+                  : "수동 등록 미수금",
               })),
             }
           : null

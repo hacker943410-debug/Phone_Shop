@@ -1,9 +1,15 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import {
+  CurrencyControl,
   DateControl,
+  ModelNumberControl,
   SelectControl,
 } from "@/components/workspace/form-client-controls";
+import {
+  WorkspaceMessageModal,
+  type WorkspaceAlertTone,
+} from "@/components/workspace/workspace-alert-dialog";
 import { TonePill } from "@/components/workspace/workspace-primitives";
 import {
   dateControlClassName,
@@ -176,40 +182,54 @@ export function PhoneField(props: PhoneFieldProps) {
   );
 }
 
-type ImeiFieldProps = Omit<
-  FormFieldProps,
-  "type" | "inputMode" | "pattern"
->;
-
-export function ImeiField(props: ImeiFieldProps) {
-  return (
-    <FormField
-      type="text"
-      inputMode="numeric"
-      maxLength={15}
-      pattern="[0-9]{15}"
-      placeholder="15자리 숫자"
-      helper="IMEI는 숫자 15자리만 저장합니다."
-      {...props}
-    />
-  );
-}
-
 type CurrencyFieldProps = Omit<
   FormFieldProps,
   "type" | "inputMode" | "step" | "pattern"
 >;
 
 export function CurrencyField(props: CurrencyFieldProps) {
+  const { label, helper, wrapperClassName, className, ...controlProps } = props;
+
   return (
-    <FormField
-      type="text"
-      inputMode="numeric"
-      pattern="[0-9]*"
-      placeholder="숫자만 입력"
-      helper="쉼표 없이 숫자만 입력합니다."
-      {...props}
-    />
+    <FieldLayout
+      label={label}
+      helper={helper ?? "숫자만 입력하면 자동으로 콤마와 원 표시가 적용됩니다."}
+      wrapperClassName={wrapperClassName}
+    >
+      <CurrencyControl
+        aria-label={label}
+        className={className}
+        placeholder="숫자만 입력"
+        {...controlProps}
+      />
+    </FieldLayout>
+  );
+}
+
+type ModelNumberFieldProps = Omit<
+  FormFieldProps,
+  "type" | "inputMode" | "pattern"
+>;
+
+export function ModelNumberField(props: ModelNumberFieldProps) {
+  const { label, helper, wrapperClassName, className, ...controlProps } = props;
+
+  return (
+    <FieldLayout
+      label={label}
+      helper={
+        helper ??
+        "영문 2자리 뒤에는 '-'가 자동으로 들어갑니다. 예: SM-009203912309"
+      }
+      wrapperClassName={wrapperClassName}
+    >
+      <ModelNumberControl
+        aria-label={label}
+        className={className}
+        placeholder="SM-3028RKSPEW"
+        {...controlProps}
+      />
+    </FieldLayout>
   );
 }
 
@@ -278,10 +298,23 @@ export function EmptyState({ message }: { message: string }) {
   );
 }
 
-export function NoticeBanner({ message }: { message: string }) {
+export function NoticeBanner({
+  message,
+  tone = "error",
+  title,
+  subtitle,
+}: {
+  message: string;
+  tone?: WorkspaceAlertTone;
+  title?: string;
+  subtitle?: string;
+}) {
   return (
-    <section className="rounded-lg border border-rose-200 bg-rose-50/85 px-5 py-4 text-sm leading-6 text-rose-900">
-      {message}
-    </section>
+    <WorkspaceMessageModal
+      message={message}
+      subtitle={subtitle}
+      title={title}
+      tone={tone}
+    />
   );
 }

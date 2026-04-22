@@ -11,6 +11,7 @@ export interface DashboardFilters {
   dateFrom: string;
   dateTo: string;
   storeId: string;
+  staffId: string;
 }
 
 export interface DashboardMetric {
@@ -31,6 +32,7 @@ export interface DashboardStaffSummary {
   staffId: string;
   staffName: string;
   salesCount: number;
+  paymentCount: number;
   salesAmount: number;
   collectedAmount: number;
   additionalPaymentAmount: number;
@@ -48,6 +50,11 @@ export interface DashboardStoreSummary {
 }
 
 export interface DashboardStoreOption {
+  id: string;
+  name: string;
+}
+
+export interface DashboardStaffOption {
   id: string;
   name: string;
 }
@@ -88,6 +95,7 @@ export interface DashboardActivationEligibleCustomer {
   carrierName: string;
   lastSaleDate: string;
   eligibleDate: string;
+  daysUntil: number;
   ruleLabel: string;
 }
 
@@ -100,6 +108,24 @@ export interface DashboardCarrierTrendSeries {
   carrierName: string;
   totalCount: number;
   points: DashboardCarrierTrendPoint[];
+}
+
+export interface DashboardReceivableHealthBucket {
+  id: string;
+  label: string;
+  count: number;
+  balanceAmount: number;
+  tone: DashboardTone;
+}
+
+export interface DashboardUpcomingScheduleRow {
+  id: string;
+  dateInput: string;
+  kindLabel: string;
+  title: string;
+  customerName: string | null;
+  subtitle: string | null;
+  statusLabel: string;
 }
 
 export interface DashboardSummary {
@@ -128,14 +154,18 @@ export interface DashboardReportData {
   periodLabel: string;
   generatedAt: string;
   availableStores: DashboardStoreOption[];
+  availableStaffs: DashboardStaffOption[];
   metrics: DashboardMetric[];
   summary: DashboardSummary;
   attentionItems: DashboardAttentionItem[];
   receivableSnapshots: DashboardReceivableSnapshot[];
   storeSummaries: DashboardStoreSummary[];
   staffSummaries: DashboardStaffSummary[];
+  receivableHealthBuckets: DashboardReceivableHealthBucket[];
   dailySummaries: DashboardDailySummary[];
   recentSales: DashboardRecentSale[];
   activationEligibleCustomers: DashboardActivationEligibleCustomer[];
+  retentionTopCustomers: DashboardActivationEligibleCustomer[];
+  upcomingScheduleRows: DashboardUpcomingScheduleRow[];
   carrierTrendSeries: DashboardCarrierTrendSeries[];
 }

@@ -7,6 +7,7 @@ import { getActivationEligibleDate } from "@/lib/activation-rules";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { formatKstDate, parseKstDateInput } from "@/lib/date-utils";
 import { prisma } from "@/lib/prisma";
+import { buildSaleProductLabels } from "@/lib/sale-registration";
 
 const salesPageSize = 10;
 
@@ -76,6 +77,7 @@ export async function getSalesCommonPageData() {
     customers,
     stores,
     activeCarriers,
+    salesAgencies,
     sharedServices,
     activationRules,
     completedSales,
@@ -132,6 +134,14 @@ export async function getSalesCommonPageData() {
             monthlyFee: true,
           },
         },
+      },
+    }),
+    prisma.salesAgency.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
       },
     }),
     prisma.addOnService.findMany({
@@ -331,6 +341,7 @@ export async function getSalesCommonPageData() {
       };
     }),
     stores,
+    salesAgencies,
     carriers: activeCarriers.map((carrier) => ({
       id: carrier.id,
       name: carrier.name,
@@ -417,7 +428,8 @@ export async function getSalesCommonPageData() {
       storeName: item.store?.name ?? null,
       color: item.color,
       capacity: item.capacity,
-      imei: item.imei,
+      serialNumber: item.serialNumber,
+      modelNumber: item.modelNumber,
       costAmount: item.costAmount,
       receivedAt: item.receivedAt.toISOString(),
     })),
@@ -459,13 +471,15 @@ export async function getSalesOverviewPageData(searchParams: SalesSearchParams) 
   };
 
   const salesSearchClauses = q
-    ? [
+      ? [
         { customer: { name: { contains: q } } },
         { customer: { phone: { contains: q } } },
         { carrier: { name: { contains: q } } },
+        { salesAgency: { name: { contains: q } } },
         { deviceModel: { name: { contains: q } } },
         { staff: { displayName: { contains: q } } },
-        { inventoryItem: { imei: { contains: q } } },
+        { inventoryItem: { serialNumber: { contains: q } } },
+        { inventoryItem: { modelNumber: { contains: q } } },
         ...(normalizedQuery
           ? [{ customer: { normalizedPhone: { contains: normalizedQuery } } }]
           : []),
@@ -535,7 +549,8 @@ export async function getSalesOverviewPageData(searchParams: SalesSearchParams) 
       customer: { select: { name: true, phone: true } },
       carrier: { select: { name: true } },
       deviceModel: { select: { name: true } },
-      inventoryItem: { select: { imei: true } },
+      inventoryItem: { select: { serialNumber: true, modelNumber: true } },
+      salesAgency: { select: { name: true } },
       store: { select: { name: true } },
       ratePlan: { select: { name: true } },
       staff: { select: { displayName: true } },
@@ -563,37 +578,61 @@ export async function getSalesOverviewPageData(searchParams: SalesSearchParams) 
       completedRevenue: filteredCompletedSalesAggregate._sum.finalSalePrice ?? 0,
       outstandingCount: filteredOutstandingSalesCount,
     },
-    sales: sales.map((sale) => ({
-      id: sale.id,
-      saleDate: sale.saleDate.toISOString(),
-      status: sale.status,
-      canceledAt: sale.canceledAt?.toISOString() ?? null,
-      cancellationReason: sale.cancellationReason,
-      storeName: sale.store?.name ?? null,
-      customerName: sale.customer.name,
-      customerPhone: sale.customer.phone,
-      carrierName: sale.carrier.name,
-      deviceModelName: sale.deviceModel.name,
-      inventoryImei: sale.inventoryItem.imei,
-      ratePlanName: sale.ratePlan?.name ?? null,
-      staffName: sale.staff.displayName,
-      subsidyAmount: sale.subsidyAmount,
-      finalSalePrice: sale.finalSalePrice,
-      discountApplied: sale.discountApplied,
-      discountMethod: sale.discountMethod,
-      discountValue: sale.discountValue,
-      rebateAmount: sale.rebateAmount,
-      policyRevenueAmount: sale.policyRevenueAmount,
-      profitDeductionAmount: sale.profitDeductionAmount,
-      receivableAmount: sale.receivableAmount,
-      receivableBalance: sale.receivable?.balanceAmount ?? 0,
-      receivableStatus: sale.receivable?.status ?? null,
-      selectedServices: sale.selectedServices.map((service) => service.nameSnapshot),
-      appliedDiscountPolicyName: sale.appliedDiscountPolicyName,
-      appliedSaleProfitPolicyName: sale.appliedSaleProfitPolicyName,
-      appliedStaffCommissionPolicyName: sale.appliedStaffCommissionPolicyName,
-      canCancel: sale.status === "COMPLETED" && sale.payments.length === 0,
-      hasPayments: sale.payments.length > 0,
-    })),
+    sales: sales.map((sale) => {
+      const productLabels = buildSaleProductLabels({
+        wirelessPostpaidSelected: sale.wirelessPostpaidSelected,
+        wirelessPrepaidSelected: sale.wirelessPrepaidSelected,
+        wirelessGeneralSelected: sale.wirelessGeneralSelected,
+        wirelessUsimOnlySelected: sale.wirelessUsimOnlySelected,
+        wirelessUsedPhoneSelected: sale.wirelessUsedPhoneSelected,
+        wirelessEggSelected: sale.wirelessEggSelected,
+        wiredInternetSelected: sale.wiredInternetSelected,
+        wiredTvSelected: sale.wiredTvSelected,
+        wiredLandlineSelected: sale.wiredLandlineSelected,
+        wiredInternetPhoneSelected: sale.wiredInternetPhoneSelected,
+        wiredBundleSelected: sale.wiredBundleSelected,
+        additionalDeviceOnlySelected: sale.additionalDeviceOnlySelected,
+      });
+
+      return {
+        id: sale.id,
+        saleDate: sale.saleDate.toISOString(),
+        status: sale.status,
+        customerEntryType: sale.customerEntryType,
+        activationType: sale.activationType,
+        canceledAt: sale.canceledAt?.toISOString() ?? null,
+        cancellationReason: sale.cancellationReason,
+        storeName: sale.store?.name ?? null,
+        salesAgencyName: sale.salesAgency?.name ?? null,
+        customerName: sale.customer.name,
+        customerPhone: sale.customer.phone,
+        carrierName: sale.carrier.name,
+        deviceModelName: sale.deviceModel.name,
+        inventorySerialNumber: sale.inventoryItem.serialNumber,
+        inventoryModelNumber: sale.inventoryItem.modelNumber,
+        ratePlanName: sale.ratePlan?.name ?? null,
+        staffName: sale.staff.displayName,
+        subsidyAmount: sale.subsidyAmount,
+        finalSalePrice: sale.finalSalePrice,
+        discountApplied: sale.discountApplied,
+        discountMethod: sale.discountMethod,
+        discountValue: sale.discountValue,
+        rebateAmount: sale.rebateAmount,
+        policyRevenueAmount: sale.policyRevenueAmount,
+        profitDeductionAmount: sale.profitDeductionAmount,
+        receivableAmount: sale.receivableAmount,
+        receivableBalance: sale.receivable?.balanceAmount ?? 0,
+        receivableStatus: sale.receivable?.status ?? null,
+        selectedServices: sale.selectedServices.map((service) => service.nameSnapshot),
+        wirelessProducts: productLabels.wirelessProducts,
+        wiredProducts: productLabels.wiredProducts,
+        additionalProducts: productLabels.additionalProducts,
+        appliedDiscountPolicyName: sale.appliedDiscountPolicyName,
+        appliedSaleProfitPolicyName: sale.appliedSaleProfitPolicyName,
+        appliedStaffCommissionPolicyName: sale.appliedStaffCommissionPolicyName,
+        canCancel: sale.status === "COMPLETED" && sale.payments.length === 0,
+        hasPayments: sale.payments.length > 0,
+      };
+    }),
   };
 }

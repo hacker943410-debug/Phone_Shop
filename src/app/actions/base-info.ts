@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireRole } from "@/lib/auth/dal";
+import { hashPassword } from "@/lib/auth/password";
 import {
   createDatabaseBackup,
   readBackupSettings,
@@ -11,6 +12,7 @@ import {
   saveBackupSettings,
 } from "@/lib/backup-storage";
 import { prisma } from "@/lib/prisma";
+import type { StaffDialogActionState } from "@/lib/staff-dialog-action-state";
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -39,6 +41,7 @@ function readInt(formData: FormData, key: string) {
 
 function revalidateBaseInfoViews() {
   revalidatePath("/settings/base");
+  revalidatePath("/staffs");
   revalidatePath("/settings/policies");
   revalidatePath("/sales");
   revalidatePath("/sales/new");
@@ -51,6 +54,14 @@ function revalidateBaseInfoViews() {
 
 function redirectToBaseInfo(tab: string, notice: string): never {
   redirect(`/settings/base?tab=${tab}&notice=${notice}`);
+}
+
+function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function isValidUsername(value: string) {
+  return /^[a-z0-9._-]{3,30}$/.test(value);
 }
 
 async function generateNextStoreCode() {
@@ -194,6 +205,158 @@ export async function toggleCarrierActiveAction(formData: FormData) {
   revalidateBaseInfoViews();
 }
 
+export async function upsertSalesAgencyAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readOptionalText(formData, "id");
+  const name = readText(formData, "name");
+
+  if (!name) {
+    return;
+  }
+
+  if (id) {
+    await prisma.salesAgency.update({
+      where: { id },
+      data: { name },
+    });
+  } else {
+    await prisma.salesAgency.create({
+      data: { name },
+    });
+  }
+
+  revalidateBaseInfoViews();
+}
+
+export async function toggleSalesAgencyActiveAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+  const nextActive = readText(formData, "nextActive") === "true";
+
+  if (!id) {
+    return;
+  }
+
+  await prisma.salesAgency.update({
+    where: { id },
+    data: { isActive: nextActive },
+  });
+
+  revalidateBaseInfoViews();
+}
+
+export async function upsertInventoryColorOptionAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readOptionalText(formData, "id");
+  const name = readText(formData, "name");
+
+  if (!name) {
+    return;
+  }
+
+  if (id) {
+    const existingColor = await prisma.inventoryColorOption.findUnique({
+      where: { id },
+      select: { name: true },
+    });
+
+    if (!existingColor) {
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryColorOption.update({
+        where: { id },
+        data: { name },
+      });
+
+      if (existingColor.name !== name) {
+        await tx.inventoryItem.updateMany({
+          where: { color: existingColor.name },
+          data: { color: name },
+        });
+      }
+    });
+  } else {
+    await prisma.inventoryColorOption.create({
+      data: { name },
+    });
+  }
+
+  revalidateBaseInfoViews();
+}
+
+export async function toggleInventoryColorOptionActiveAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+  const nextActive = readText(formData, "nextActive") === "true";
+
+  if (!id) {
+    return;
+  }
+
+  await prisma.inventoryColorOption.update({
+    where: { id },
+    data: { isActive: nextActive },
+  });
+
+  revalidateBaseInfoViews();
+}
+
+export async function upsertDeviceModelAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readOptionalText(formData, "id");
+  const name = readText(formData, "name");
+  const manufacturer = readText(formData, "manufacturer");
+
+  if (!name || !manufacturer) {
+    return;
+  }
+
+  if (id) {
+    await prisma.deviceModel.update({
+      where: { id },
+      data: {
+        name,
+        manufacturer,
+      },
+    });
+  } else {
+    await prisma.deviceModel.create({
+      data: {
+        name,
+        manufacturer,
+        isActive: true,
+      },
+    });
+  }
+
+  revalidateBaseInfoViews();
+}
+
+export async function toggleDeviceModelActiveAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+  const nextActive = readText(formData, "nextActive") === "true";
+
+  if (!id) {
+    return;
+  }
+
+  await prisma.deviceModel.update({
+    where: { id },
+    data: { isActive: nextActive },
+  });
+
+  revalidateBaseInfoViews();
+}
+
 export async function upsertRatePlanAction(formData: FormData) {
   await requireRole("ADMIN");
 
@@ -314,6 +477,117 @@ export async function toggleAddOnServiceActiveAction(formData: FormData) {
 
   await prisma.addOnService.update({
     where: { id },
+    data: { isActive: nextActive },
+  });
+
+  revalidateBaseInfoViews();
+}
+
+export async function createStaffDialogAction(
+  _previousState: StaffDialogActionState,
+  formData: FormData,
+): Promise<StaffDialogActionState> {
+  await requireRole("ADMIN");
+
+  const displayName = readText(formData, "displayName");
+  const username = normalizeUsername(readText(formData, "username"));
+  const password = readText(formData, "password");
+  const fields = {
+    displayName,
+    username,
+    password,
+  };
+
+  if (!displayName || !username || !password) {
+    return {
+      status: "error",
+      message: "이름, 로그인 아이디, 초기 비밀번호를 모두 입력해 주세요.",
+      fields,
+    };
+  }
+
+  if (!isValidUsername(username)) {
+    return {
+      status: "error",
+      message: "로그인 아이디는 영문 소문자, 숫자, 점(.), 밑줄(_), 하이픈(-)만 사용할 수 있습니다.",
+      fields,
+    };
+  }
+
+  if (password.length < 8) {
+    return {
+      status: "error",
+      message: "초기 비밀번호는 8자 이상으로 입력해 주세요.",
+      fields,
+    };
+  }
+
+  const existingStaff = await prisma.user.findUnique({
+    where: {
+      username,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existingStaff) {
+    return {
+      status: "error",
+      message: "이미 사용 중인 로그인 아이디입니다. 다른 아이디로 다시 등록해 주세요.",
+      fields,
+    };
+  }
+
+  await prisma.user.create({
+    data: {
+      username,
+      displayName,
+      passwordHash: hashPassword(password),
+      role: "STAFF",
+      isActive: true,
+    },
+  });
+
+  revalidateBaseInfoViews();
+
+  return {
+    status: "success",
+    message: "직원을 등록했습니다.",
+    fields: {
+      displayName: "",
+      username: "",
+      password: "",
+    },
+  };
+}
+
+export async function toggleStaffActiveAction(formData: FormData) {
+  await requireRole("ADMIN");
+
+  const id = readText(formData, "id");
+  const nextActive = readText(formData, "nextActive") === "true";
+
+  if (!id) {
+    return;
+  }
+
+  const staff = await prisma.user.findFirst({
+    where: {
+      id,
+      role: "STAFF",
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!staff) {
+    return;
+  }
+
+  await prisma.user.update({
+    where: { id: staff.id },
     data: { isActive: nextActive },
   });
 
